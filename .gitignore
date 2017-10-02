@@ -1,0 +1,13 @@
+# compiled files
+__pycache__
+*.py[oc]
+
+# point files
+.*
+# expect for me
+!.gitignore
+
+# log files
+*.log
+*.out
+*.err

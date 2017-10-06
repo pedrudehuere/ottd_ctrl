@@ -5,9 +5,10 @@ from datetime import date, timedelta
 from enum import Enum
 from struct import Struct
 
-CHARSET = 'utf8'  # TODO verify
+ZERO_BYTE = b'\x00'
+ENCODING = 'utf8'  # TODO verify
 STRING_DELIMITER = b'\x00'
-MAX_PACKET_SIZE = 1460  # the packet size is two bytes
+MAX_PACKET_SIZE = 1460
 EPOCH_DATE = date(year=1, month=1, day=1)
 
 
@@ -32,6 +33,15 @@ class Type:
         :param index: Where to start to decode
         :returns: the decoded data and its size in bytes
                   (which sometimes is known only after decoding)
+        """
+        raise NotImplementedError('Must be implemented')
+
+    @classmethod
+    def encode(cls, value):
+        """
+        Decodes given value as bytes
+        :param value: Value do be encoded
+        :return: bytes
         """
         raise NotImplementedError('Must be implemented')
 
@@ -78,23 +88,22 @@ class String(Type):
         if index is None:
             index = 0
         raw_string = raw_data[index:index + raw_data[index:].find(STRING_DELIMITER)]
-        return raw_string.decode(CHARSET), len(raw_string) + len(STRING_DELIMITER)
+        return raw_string.decode(ENCODING), len(raw_string) + len(STRING_DELIMITER)
 
     @classmethod
     def encode(cls, the_string):
-        return the_string.encode(CHARSET) + STRING_DELIMITER
+        return the_string.encode(ENCODING) + STRING_DELIMITER
 
 
 class Date(UInt32):
-    # TODO size
     @classmethod
     def decode(cls, raw_data, index=None):
         # OpenTTD server sends dates as number of days since day 0,
         # but since datetime does not support dates before 1.1.1
-        # we have to subtract 366 days (because year 1 is a leap year)
+        # we have to subtract 366 days (because year 0 is a leap year)
         number, size = super().decode(raw_data, index)
         return EPOCH_DATE + timedelta(number - 366), size
 
     @classmethod
     def encode(cls, the_date):
-        raise NotImplementedError()
+        return super().encode((the_date - EPOCH_DATE).days + 366)

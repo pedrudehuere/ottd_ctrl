@@ -54,7 +54,7 @@ if __name__ == '__main__':
         with AdminClient('127.0.0.1', 3977, timeout_s=10).connected() as client:
 
             # sending Join packet
-            join_packet = packet.AdminJoin('test', 'pass', '1.2.3')
+            join_packet = packet.AdminJoinPacket('test', 'pass', '1.2.3')
             client.send_packet(join_packet)
             p1 = client.receive_packet()  # protocol
             p2 = client.receive_packet()  # welcome

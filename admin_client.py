@@ -46,7 +46,7 @@ class AdminClient:
         if self.socket is None:
             raise Exception("Cannot send if not connected")
         # TODO handle socket errors
-        self.socket.sendall(packet.encode())
+        self.socket.sendall(packet.encoded())
 
     def receive_packet(self):
         if self.socket is None:

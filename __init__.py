@@ -54,12 +54,19 @@ if __name__ == '__main__':
         with AdminClient('127.0.0.1', 3977, timeout_s=10).connected() as client:
 
             # sending Join packet
-            join_packet = packet.AdminJoinPacket('test', 'pass', '1.2.3')
+            join_packet = packet.AdminJoinPacket(password='pass', name='test', version='1.2.3')
             client.send_packet(join_packet)
             p1 = client.receive_packet()  # protocol
             p2 = client.receive_packet()  # welcome
 
-            log.info("Working...")
-            time.sleep(7)
+            # log.info("Working...")
+            # time.sleep(2)
+
+            log.info("Asking for date")
+
+            client.send_packet(packet.AdminPollPacket(update_type=packet.AdminUpdateType.ADMIN_UPDATE_DATE))
+            the_date = client.receive_packet().date
+
+            log.info('The date is: %s', the_date.strftime('%Y.%m.%d'))
 
     log.info("End")

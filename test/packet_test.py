@@ -82,3 +82,10 @@ def test_admin_packet_magic_encode():
                       tap.my_custom_encode(values['method_name_field'])
 
     assert tap._raw_data == expected_stream, 'Encoded stream does not match'
+
+
+# TODO test_admin_packet_encode
+
+# TODO test_server_packet_decode
+
+# TODO test_server_packet_magic_decode

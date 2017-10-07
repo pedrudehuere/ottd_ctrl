@@ -2,6 +2,7 @@
 
 
 # standard library
+from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import socket
@@ -9,9 +10,19 @@ import socket
 # project
 import packet
 
+DEFAULT_SOCKET_TIMEOUT_S = 5
+
+
+class CallbackPrepend:
+    pass
+
+
+class CallbackAppend:
+    pass
+
 
 class AdminClient:
-    def __init__(self, server_host, server_port, timeout_s):
+    def __init__(self, server_host, server_port, timeout_s=None, callbacks=None):
         """
 
         :param server_host: Admin server host
@@ -19,9 +30,23 @@ class AdminClient:
         """
         self.host = server_host
         self.port = server_port
-        self.timeout_s = timeout_s
+        self.timeout_s = timeout_s or DEFAULT_SOCKET_TIMEOUT_S
         self.socket = None
         self.log = logging.getLogger("AdminClient")
+        self.callbacks = defaultdict(list)
+        self.register_callbacks(callbacks or {})
+
+    def register_callbacks(self, callbacks):
+        [[self.register_callback(pt, cb) for cb in cbs] for (pt, cbs) in callbacks.items()]
+
+    def register_callback(self, packet_type, callback, position=None):
+        if position is None:
+            position = CallbackAppend
+        if position is CallbackAppend:
+            position = len(self.callbacks[packet_type])
+        elif position is CallbackPrepend:
+            position = 0
+        self.callbacks[packet_type].insert(position, callback)
 
     @contextmanager
     def connected(self):
@@ -49,6 +74,7 @@ class AdminClient:
         self.socket.sendall(packet.encoded())
 
     def receive_packet(self):
+        """Receives packet from network, calls registered callbacks"""
         if self.socket is None:
             raise Exception("Cannot receive if not connected")
         # reading packet size
@@ -57,7 +83,12 @@ class AdminClient:
         # reading bytes from socket
         raw_data = raw_size + self._read_bytes(packet_size - packet.size_len)
         # getting packet
-        return packet.ServerPacket.decode(packet_size, raw_data)
+        pkt = packet.ServerPacket.decode(packet_size, raw_data)
+        # calling callbacks
+        callbacks = self.callbacks.get(pkt.type_, [])
+        for cb in callbacks:
+            cb(pkt)
+        return pkt
 
     def _receive_packet_size(self):
         return

@@ -113,6 +113,7 @@ class AdminUpdateType:
 #                 namespace[field] = None
 #         return super().__new__(cls, name, bases, namespace, **kwargs)
 
+
 class PacketError(Exception):
     """Base Packet related errors"""
     pass

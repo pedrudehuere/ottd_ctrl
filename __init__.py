@@ -40,6 +40,14 @@ def parse_args():
     return ap.parse_args()
 
 
+def on_welcome(pkt):
+    log.info("Received welcome from server '%s'", pkt.server_name)
+
+
+def on_protocol(pkt):
+    log.info('Received protocol from server')
+
+
 if __name__ == '__main__':
     args = parse_args()
     log.init()
@@ -53,14 +61,20 @@ if __name__ == '__main__':
         # starting admin client
         with AdminClient('127.0.0.1', 3977, timeout_s=10).connected() as client:
 
+            # registering callbacks
+            client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_WELCOME,
+                                     on_welcome)
+            client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL,
+                                     on_protocol)
+
             # sending Join packet
             join_packet = packet.AdminJoinPacket(password='pass', name='test', version='1.2.3')
             client.send_packet(join_packet)
-            p1 = client.receive_packet()  # protocol
-            p2 = client.receive_packet()  # welcome
+            protocol = client.receive_packet()  # protocol
+            welcome = client.receive_packet()  # welcome
 
-            # log.info("Working...")
-            # time.sleep(2)
+            log.info("Working...")
+            time.sleep(2)
 
             log.info("Asking for date")
 

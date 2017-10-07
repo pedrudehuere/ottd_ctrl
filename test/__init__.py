@@ -21,8 +21,10 @@ if __name__ == '__main__':
     ]
 
     tests = [
-        os.path.join(tests_base_path, 'packet_test.py'),
-        os.path.join(tests_base_path, 'protocol_test.py')
+        'admin_client_test.py',
+        'packet_test.py',
+        'protocol_test.py',
     ]
+    tests = [os.path.join(tests_base_path, t) for t in tests]
 
     pytest.main(pytest_params + tests)

@@ -48,6 +48,10 @@ class AdminClient:
             position = 0
         self.callbacks[packet_type].insert(position, callback)
 
+    @property
+    def is_connected(self):
+        return self.socket is not None
+
     @contextmanager
     def connected(self):
         self.connect()
@@ -84,14 +88,15 @@ class AdminClient:
         raw_data = raw_size + self._read_bytes(packet_size - packet.size_len)
         # getting packet
         pkt = packet.ServerPacket.decode(packet_size, raw_data)
-        # calling callbacks
+        # calling generic callbacks (for all received packets)
+        generic_callbacks = self.callbacks.get(None, [])
+        for cb in generic_callbacks:
+            cb(pkt)
+        # callbacks for specific packet
         callbacks = self.callbacks.get(pkt.type_, [])
         for cb in callbacks:
             cb(pkt)
         return pkt
-
-    def _receive_packet_size(self):
-        return
 
     def _read_bytes(self, nb):
         """

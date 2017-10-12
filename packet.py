@@ -16,6 +16,11 @@ type_len = type_fmt.size
 delimiter_size = 1
 
 
+def enum_str(enum):
+    """Returns a dict with strings by constant"""
+    return {v: k for k, v in enum.__dict__.items() if not k.startswith('__')}
+
+
 # src/network/core/tcp_admin.h
 class PacketTypes:
     UNKNOWN_PACKET = -1
@@ -100,6 +105,52 @@ class AdminUpdateType:
     ADMIN_UPDATE_END = 10               # Must ALWAYS be on the end of this list!! (period)
 
 
+# Update frequencies an admin can register
+# src/network/core/tcp_admin.h
+class AdminUpdateFrequency:
+    ADMIN_FREQUENCY_POLL = 0x01         # The admin can poll this.
+    ADMIN_FREQUENCY_DAILY = 0x02        # The admin gets information about this on a daily basis.
+    ADMIN_FREQUENCY_WEEKLY = 0x04       # The admin gets information about this on a weekly basis.
+    ADMIN_FREQUENCY_MONTHLY = 0x08      # The admin gets information about this on a monthly basis.
+    ADMIN_FREQUENCY_QUARTERLY = 0x10    # The admin gets information about this on a quarterly basis.
+    ADMIN_FREQUENCY_ANUALLY = 0x20      # The admin gets information about this on a yearly basis.
+    ADMIN_FREQUENCY_AUTOMATIC = 0x40    # The admin gets information about this when it changes.
+
+
+# src/network/network_type.h
+class NetworkErrorCode:
+    NETWORK_ERROR_GENERAL = 0  # Try to use this one like never
+
+    # Signals from clients
+    NETWORK_ERROR_DESYNC = 1
+    NETWORK_ERROR_SAVEGAME_FAILED = 2
+    NETWORK_ERROR_CONNECTION_LOST = 3
+    NETWORK_ERROR_ILLEGAL_PACKET = 4
+    NETWORK_ERROR_NEWGRF_MISMATCH = 5
+
+    # Signals from servers
+    NETWORK_ERROR_NOT_AUTHORIZED = 6
+    NETWORK_ERROR_NOT_EXPECTED = 7
+    NETWORK_ERROR_WRONG_REVISION = 8
+    NETWORK_ERROR_NAME_IN_USE = 9
+    NETWORK_ERROR_WRONG_PASSWORD = 10
+    NETWORK_ERROR_COMPANY_MISMATCH = 11  # Happens in CLIENT_COMMAND
+    NETWORK_ERROR_KICKED = 12
+    NETWORK_ERROR_CHEATER = 13
+    NETWORK_ERROR_FULL = 14
+    NETWORK_ERROR_TOO_MANY_COMMANDS = 15
+    NETWORK_ERROR_TIMEOUT_PASSWORD = 16
+    NETWORK_ERROR_TIMEOUT_COMPUTER = 17
+    NETWORK_ERROR_TIMEOUT_MAP = 18
+    NETWORK_ERROR_TIMEOUT_JOIN = 19
+
+    NETWORK_ERROR_END = 20
+
+
+# String for constants
+AdminUpdateTypeStr = enum_str(AdminUpdateType)
+NetworkErrorCodeStr = enum_str(NetworkErrorCode)
+
 
 # class PacketMeta(type):
 #     """
@@ -160,6 +211,10 @@ class Packet:
         self.log = logging.getLogger(self.__class__.__name__)
         for f in self._fields:
             setattr(self, f[0], None)
+
+    def pretty(self):
+        """Returns a pretty representation of itself"""
+        return ', '.join(['%s: %s' % (field[0], getattr(self, field[0])) for field in self._fields])
 
 
 class AdminPacket(Packet):
@@ -326,6 +381,14 @@ class AdminRConPacket(AdminPacket):
     ]
 
 
+class AdminUpdateFrequenciesPacket(AdminPacket):
+    type_ = PacketTypes.ADMIN_PACKET_ADMIN_UPDATE_FREQUENCY
+    _fields = [
+        ('update_type', protocol.UInt16),  # a value of AdminUpdateType
+        ('update_frequency', protocol.UInt16),  # a value of AdminUpdateFrequency
+    ]
+
+
 # ##### ServerPackets - packet_test__ sent from server to client ###################
 class UnknownServerPacket(ServerPacket):
     type_ = -1
@@ -352,6 +415,11 @@ class ServerProtocolPacket(ServerPacket):
             res[key] = value
         _ = self._decode_field(protocol.UInt8)  # final separator
         return res
+
+    def pretty(self):
+        return ', '.join([str(self.version)] +
+                         ['%s: 0x%x' % (AdminUpdateTypeStr[k], v)
+                  for k, v in self.supported_update_freqs.items()])
 
 
 class ServerWelcomePacket(ServerPacket):
@@ -389,6 +457,16 @@ class ServerRConPacket(ServerPacket):
         ('colour', protocol.UInt16),
         ('result', protocol.String),
     ]
+
+
+class ServerErrorPacket(ServerPacket):
+    type_ = PacketTypes.ADMIN_PACKET_SERVER_ERROR
+    _fields = [
+        ('error', protocol.UInt8),
+    ]
+
+    def pretty(self):
+        return NetworkErrorCodeStr.get(self.error, 'UNKNOWN')
 
 
 # maps packet type with class, makes sense only for server packets

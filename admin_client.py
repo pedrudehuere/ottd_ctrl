@@ -21,6 +21,10 @@ class CallbackAppend:
     pass
 
 
+class ConnectionClosedByPeer(Exception):
+    pass
+
+
 class AdminClient:
     def __init__(self, server_host, server_port, timeout_s=None, callbacks=None):
         """
@@ -82,10 +86,14 @@ class AdminClient:
         if self.socket is None:
             raise Exception("Cannot receive if not connected")
         # reading packet size
-        raw_size = self._read_bytes(packet.size_len)
-        packet_size = packet.size_fmt.unpack(raw_size)[0]
-        # reading bytes from socket
-        raw_data = raw_size + self._read_bytes(packet_size - packet.size_len)
+        try:
+            raw_size = self._read_bytes(packet.size_len)
+            packet_size = packet.size_fmt.unpack(raw_size)[0]
+            # reading bytes from socket
+            raw_data = raw_size + self._read_bytes(packet_size - packet.size_len)
+        except ConnectionClosedByPeer:
+            self.socket = None
+            raise
         # getting packet
         pkt = packet.ServerPacket.decode(packet_size, raw_data)
         # calling generic callbacks (for all received packets)
@@ -94,6 +102,8 @@ class AdminClient:
             cb(pkt)
         # callbacks for specific packet
         callbacks = self.callbacks.get(pkt.type_, [])
+        if len(callbacks) == 0:
+            self.log.debug('No callback for packet type %s', pkt.type_)
         for cb in callbacks:
             cb(pkt)
         return pkt
@@ -105,9 +115,9 @@ class AdminClient:
         res = b''
         while nb > 0:
             recvd = self.socket.recv(nb)
-            if recvd == '':
+            if len(recvd) == 0:
                 # TODO investigate this case further
-                raise Exception("Connecion closed")
+                raise ConnectionClosedByPeer()
             nb -= len(recvd)
             res += recvd
         return res

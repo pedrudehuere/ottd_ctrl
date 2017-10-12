@@ -69,21 +69,23 @@ if __name__ == '__main__':
         }
         with Session(**session_kwargs).server_joined() as session:
 
-            # registering callbacks
-            session.admin_client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_WELCOME,
-                                                   on_welcome)
-            session.admin_client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL,
-                                                   on_protocol)
+            # # registering callbacks
+            # session.admin_client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_WELCOME,
+            #                                        on_welcome)
+            # session.admin_client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL,
+            #                                        on_protocol)
+            #
+            #
+            # log.info("Working...")
+            # time.sleep(2)
+            #
+            # log.info("Asking for date")
+            #
+            # session.send_packet(packet.AdminPollPacket(update_type=packet.AdminUpdateType.ADMIN_UPDATE_DATE))
+            # the_date = session.receive_packet().date
+            #
+            # log.info('The date is: %s', the_date.strftime('%Y.%m.%d'))
 
-
-            log.info("Working...")
-            time.sleep(2)
-
-            log.info("Asking for date")
-
-            session.send_packet(packet.AdminPollPacket(update_type=packet.AdminUpdateType.ADMIN_UPDATE_DATE))
-            the_date = session.receive_packet().date
-
-            log.info('The date is: %s', the_date.strftime('%Y.%m.%d'))
+            session.main_loop()
 
     log.info("End")

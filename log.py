@@ -11,7 +11,7 @@ error = None
 exception = None
 
 
-def init(name='ottd_ctrl', level=logging.INFO):
+def init(name='ottd_ctrl', level=logging.DEBUG):
     """Initializes logging"""
     global ottd_ctrl_logger, debug, info, warning, error, exception
     fmt = '%(asctime)s %(levelname)s %(name)s %(message)s'

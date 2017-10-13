@@ -38,7 +38,7 @@ def _test_decode(value_result, type_class):
         else:
             assert False, "Expected '%s' error did not occur" % str(result)
     else:
-        assert type_class.decode(value)[0] == result, 'Encoded value does not match'
+        assert type_class.decode(value)[0] == result, 'Decoded value does not match'
 
 
 @pytest.mark.parametrize(VALUE_RESULT, [
@@ -56,7 +56,7 @@ def test_uint8_encode(value_result):
     (b'\x00',       0),
     (b'\x01',       1),
     (b'\xFF',       255),
-    (b'\xFF\x00',   struct.error),
+    (b'\x01\x00',   struct.error),
     (b'',           struct.error)
 
 ])
@@ -79,7 +79,7 @@ def test_uint16_encode(value_result):
     (b'\x00\x00',       0),
     (b'\x01\x00',       1),
     (b'\xFF\xFF',       65535),
-    (b'\xFF\x00\x00',   struct.error),
+    (b'\x01\x00\x00',   struct.error),
     (b'\x00',           struct.error)
 
 ])
@@ -102,12 +102,61 @@ def test_uint32_encode(value_result):
     (b'\x00\x00\x00\x00',       0),
     (b'\x01\x00\x00\x00',       1),
     (b'\xFF\xFF\xFF\xFF',       (2 ** 32) - 1),
-    (b'\xFF\x00\x00\x00\x00',   struct.error),
+    (b'\x01\x00\x00\x00\x00',   struct.error),
     (b'\x00\x00\x00',           struct.error)
 
 ])
 def test_uint32_decode(value_result):
     _test_decode(value_result, UInt32)
+
+
+@pytest.mark.parametrize(VALUE_RESULT, [
+    (0,             b'\x00\x00\x00\x00\x00\x00\x00\x00'),
+    (1,             b'\x01\x00\x00\x00\x00\x00\x00\x00'),
+    ((2 ** 64) - 1, b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF'),
+    (2 ** 64,       struct.error),
+    (-1,            struct.error)
+])
+def test_uint64_encode(value_result):
+    _test_encode(value_result, UInt64)
+
+
+@pytest.mark.parametrize(VALUE_RESULT, [
+    (b'\x00\x00\x00\x00\x00\x00\x00\x00',       0),
+    (b'\x01\x00\x00\x00\x00\x00\x00\x00',       1),
+    (b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF',       (2 ** 64) - 1),
+    (b'\x01\x00\x00\x00\x00\x00\x00\x00\x00',   struct.error),
+    (b'\x00\x00\x00\x00\x00\x00\x00',           struct.error)
+
+])
+def test_uint64_decode(value_result):
+    _test_decode(value_result, UInt64)
+
+
+@pytest.mark.parametrize(VALUE_RESULT, [
+    (0,                 b'\x00\x00\x00\x00\x00\x00\x00\x00'),
+    (1,                 b'\x01\x00\x00\x00\x00\x00\x00\x00'),
+    (-1,                b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF'),
+    (((2**64)//2) - 1,  b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x7F'),  # max positive
+    (-((2**64)//2),     b'\x00\x00\x00\x00\x00\x00\x00\x80'),  # max negative
+    ((2**64)//2,        struct.error),  # max positive + 1
+    (-((2**64)//2) - 1, struct.error),  # max negative - 1
+])
+def test_sint64_encode(value_result):
+    _test_encode(value_result, SInt64)
+
+
+@pytest.mark.parametrize(VALUE_RESULT, [
+    (b'\x00\x00\x00\x00\x00\x00\x00\x00',       0),
+    (b'\x01\x00\x00\x00\x00\x00\x00\x00',       1),
+    (b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF',       -1),
+    (b'\xff\xff\xff\xff\xff\xff\xff\x7f',       ((2**64)//2)-1),
+    (b'\x00\x00\x00\x00\x00\x00\x00\x80',       -((2**64)//2)),
+    (b'\x01\x00\x00\x00\x00\x00\x00\x00\x00',   struct.error),
+    (b'\x00\x00\x00\x00\x00\x00\x00',           struct.error),
+])
+def test_sint64_decode(value_result):
+    _test_decode(value_result, SInt64)
 
 
 @pytest.mark.parametrize(VALUE_RESULT, [

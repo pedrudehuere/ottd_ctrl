@@ -9,7 +9,8 @@ from select import select
 from admin_client import AdminClient, CallbackPrepend
 import log
 import packet
-from packet import PacketTypes, AdminUpdateType, AdminUpdateFrequency
+from const import AdminUpdateFrequencyStr, AdminUpdateTypeStr
+from const import PacketTypes, AdminUpdateType, AdminUpdateFrequency
 
 
 class NotAllPacketReceived(Exception):
@@ -19,6 +20,7 @@ class NotAllPacketReceived(Exception):
 class Session:
     def __init__(self, client_name, password, client_version,
                  server_host, server_port, timeout_s=None):
+        # TODO update frequencies as parameter?
         self.client_name = client_name
         self.password = password
         self.client_version = client_version
@@ -27,6 +29,8 @@ class Session:
 
         self.welcome_packet = None
         self.protocol_packet = None
+
+        self.supported_update_frequencies = None
 
         self._server_joined = False
         self.current_date = None
@@ -51,14 +55,45 @@ class Session:
         self.receive_packets(2, timeout_s=2)
 
         if self._server_joined:
-            log.info("Server '%s' joined, version: %s", self.server_name, self.server_version)
+            log.info("Server '%s' joined, protocol version: %s", self.server_name, self.server_version)
         else:
             log.error("Could not jon server")
 
-        self.send_packet(packet.AdminUpdateFrequenciesPacket(update_type=AdminUpdateType.ADMIN_UPDATE_DATE,
-                                                             update_frequency=AdminUpdateFrequency.ADMIN_FREQUENCY_DAILY))
+        # Date updates
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_DATE,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_DAILY)
+
+        # Client updates
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CLIENT_INFO,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
+
+        # Companies updates
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_INFO,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
+
+        #Companies economy update
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_ECONOMY,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
+
+        # Companies economy update
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_STATS,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
 
         # TODO send update frequencies
+
+    def set_update_frequency(self, update_type, update_frequency):
+        """Checks if given frequency is supported by server, if not raises an error"""
+        if self.supported_update_frequencies is not None:
+            if update_type not in self.supported_update_frequencies:
+                raise Exception('Unknown update type %s' % update_type)
+            if not self.supported_update_frequencies[update_type] & update_frequency:
+                raise Exception('Frequency %s not supported for type %s' %
+                                (AdminUpdateFrequencyStr[update_frequency],
+                                 AdminUpdateTypeStr[update_type]))
+            self.send_packet(packet.AdminUpdateFrequenciesPacket(update_type=update_type,
+                                                                 update_frequency=update_frequency))
+        else:
+            log.warning('Setting update frequencies without knowing supported frequencies')
 
     def main_loop(self):
         stop = False
@@ -127,6 +162,7 @@ class Session:
 
     def _on_protocol(self, pkt):
         self.protocol_packet = pkt
+        self.supported_update_frequencies = pkt.supported_update_freqs
 
     def _on_date(self, pkt):
         self.current_date = pkt.date

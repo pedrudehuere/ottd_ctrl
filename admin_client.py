@@ -8,6 +8,7 @@ import logging
 import socket
 
 # project
+from const import PacketTypesStr
 import packet
 
 DEFAULT_SOCKET_TIMEOUT_S = 5
@@ -37,6 +38,7 @@ class AdminClient:
         self.timeout_s = timeout_s or DEFAULT_SOCKET_TIMEOUT_S
         self.socket = None
         self.log = logging.getLogger("AdminClient")
+        self.log.setLevel(logging.DEBUG)
         self.callbacks = defaultdict(list)
         self.register_callbacks(callbacks or {})
 
@@ -103,7 +105,7 @@ class AdminClient:
         # callbacks for specific packet
         callbacks = self.callbacks.get(pkt.type_, [])
         if len(callbacks) == 0:
-            self.log.debug('No callback for packet type %s', pkt.type_)
+            self.log.warning('No callback for packet type %s', PacketTypesStr[pkt.type_])
         for cb in callbacks:
             cb(pkt)
         return pkt

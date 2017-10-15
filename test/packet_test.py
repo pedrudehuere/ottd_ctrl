@@ -46,8 +46,8 @@ def test_admin_packet_magic_encode():
         def my_custom_encode(self, data):
             res = b''
             for k, v in data.items():
-                res += String.encode(k)
-                res += UInt8.encode(v)
+                res += String(k).raw_data
+                res += UInt8(v).raw_data
             return res
 
         _fields = [
@@ -61,6 +61,7 @@ def test_admin_packet_magic_encode():
         ]
 
     values = {
+        # TODO test None values
         'boolean_field':        True,
         'date_field':           date(1985, 5, 7),
         'string_field':         'öä£đßŋ{}đðł{',
@@ -73,12 +74,12 @@ def test_admin_packet_magic_encode():
     tap = TestAdminPacket(**values)
     tap._magic_encode()
 
-    expected_stream = Boolean.encode(values['boolean_field']) + \
-                      Date.encode(values['date_field']) + \
-                      String.encode(values['string_field']) + \
-                      UInt8.encode(values['uint8_field']) + \
-                      UInt16.encode(values['uint16_field']) + \
-                      UInt32.encode(values['uint32_field']) + \
+    expected_stream = Boolean(values['boolean_field']).raw_data + \
+                      Date(values['date_field']).raw_data + \
+                      String(values['string_field']).raw_data + \
+                      UInt8(values['uint8_field']).raw_data + \
+                      UInt16(values['uint16_field']).raw_data + \
+                      UInt32(values['uint32_field']).raw_data + \
                       tap.my_custom_encode(values['method_name_field'])
 
     assert tap._raw_data == expected_stream, 'Encoded stream does not match'

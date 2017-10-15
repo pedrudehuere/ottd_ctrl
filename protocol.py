@@ -4,14 +4,14 @@
 from datetime import date, timedelta
 from enum import Enum
 from pprint import pformat
-from struct import Struct
+from struct import Struct, error as StructError
 
 # project
 from const import NetworkVehicleType, NetworkVehicleTypeStr
 
 ZERO_BYTE = b'\x00'
 ENCODING = 'utf8'  # TODO verify
-STRING_DELIMITER = b'\x00'
+STRING_DELIMITER = ZERO_BYTE
 MAX_PACKET_SIZE = 1460
 EPOCH_DATE = date(year=1, month=1, day=1)
 
@@ -19,34 +19,62 @@ EPOCH_DATE = date(year=1, month=1, day=1)
 bool_fmt = Struct('<?')
 bool_size = 1
 
-# Type of data found on the wire
-Types = Enum(
-    'Types',
-    'uint8 uint16 uint32 boolean string date',
-)
+
+class TypeError(Exception):
+    pass
+
+
+class FieldEncodeError(TypeError):
+    pass
+
+
+class FieldDecodeError(TypeError):
+    pass
+
+
+class StringDecodeError(FieldDecodeError):
+    pass
 
 
 class Type:
-    struct = None
+    def __init__(self, value=None, raw_data=None):
+        """
 
-    @classmethod
-    def decode(cls, raw_data, index=None):
+        :param value:
+        :param raw_data: Bytes, must start with the field, but can be longer,
+                         the bytes after the decoded field are ignored
         """
-        Decodes given raw_data, optionally starting at index
-        :param raw_data: Data to decode
-        :param index: Where to start to decode
-        :returns: the decoded data and its size in bytes
-                  (which sometimes is known only after decoding)
-        """
+        assert value is not None or raw_data is not None, \
+            "Need wither 'value' or 'raw_data'"
+        self._value = value
+        self._raw_data = raw_data
+        self._raw_size = None
+
+    @property
+    def value(self):
+        if self._value is None:
+            self.decode()
+        return self._value
+
+    @property
+    def raw_data(self):
+        if self._raw_data is None:
+            self.encode()
+        return self._raw_data
+
+    @property
+    def raw_size(self):
+        """Size in bytes of the encoded value"""
+        if self._raw_size is None:
+            self.encode()
+        return self._raw_size
+
+    def encode(self):
+        """Sets value and size from decoded raw data"""
         raise NotImplementedError('Must be implemented')
 
-    @classmethod
-    def encode(cls, value):
-        """
-        Decodes given value as bytes
-        :param value: Value do be encoded
-        :return: bytes
-        """
+    def decode(self):
+        """Sets raw data from encoded value"""
         raise NotImplementedError('Must be implemented')
 
 
@@ -60,16 +88,26 @@ class CompositeType(Type):
 
 
 class NumberType(Type):
-    @classmethod
-    def decode(cls, raw_data, index=None):
-        if index is not None:
-            return cls.struct.unpack_from(raw_data, index)[0], cls.struct.size
-        else:
-            return cls.struct.unpack(raw_data)[0], cls.struct.size
+    """
+    Must have a struct attribute, the size of these types is known in advance
+    """
+    struct = None
 
-    @classmethod
-    def encode(cls, the_number):
-        return cls.struct.pack(the_number)
+    def encode(self):
+        try:
+            self._raw_data = self.struct.pack(self._value)
+        except StructError as e:
+            raise FieldEncodeError(str(e))
+
+    def decode(self):
+        try:
+            self._value = self.struct.unpack_from(self._raw_data)[0]
+        except StructError as e:
+            raise FieldDecodeError(str(e))
+
+    @property
+    def raw_size(self):
+        return self.struct.size
 
 
 class UInt8(NumberType):
@@ -78,7 +116,6 @@ class UInt8(NumberType):
 
 class UInt16(NumberType):
     struct = Struct('<H')
-
 
 
 class UInt32(NumberType):
@@ -93,44 +130,44 @@ class SInt64(NumberType):
     struct = Struct('<q')
 
 
-class Boolean(UInt8):
-    @classmethod
-    def decode(cls, raw_data, index=None):
-        number, size = super().decode(raw_data, index)
-        return bool(number), size
+class Boolean(NumberType):
+    struct = UInt8.struct
 
-    @classmethod
-    def encode(cls, the_boolean):
-        return super().encode(1 if the_boolean else 0)
+    def encode(self):
+        self._raw_data = UInt8(value=1 if bool(self._value) else 0).raw_data
+
+    def decode(self):
+        self._value = bool(UInt8(raw_data=self._raw_data).value)
+
+
+class Date(NumberType):
+    struct = UInt32.struct
+
+    def encode(self):
+        self._raw_data = UInt32(value=(self._value - EPOCH_DATE).days + 366).raw_data
+
+    def decode(self):
+        self._value = EPOCH_DATE + timedelta(days=UInt32(raw_data=self._raw_data).value - 366)
 
 
 class String(Type):
-    @classmethod
-    def decode(cls, raw_data, index=None):
-        if index is None:
-            index = 0
-        raw_string = raw_data[index:index + raw_data[index:].find(STRING_DELIMITER)]
-        return raw_string.decode(ENCODING), len(raw_string) + len(STRING_DELIMITER)
+    def encode(self):
+        self._raw_data = self._value.encode(ENCODING) + STRING_DELIMITER
+        self._raw_size = len(self._raw_data)
 
-    @classmethod
-    def encode(cls, the_string):
-        return the_string.encode(ENCODING) + STRING_DELIMITER
-
-
-class Date(UInt32):
-    @classmethod
-    def decode(cls, raw_data, index=None):
-        # OpenTTD server sends dates as number of days since day 0,
-        # but since datetime does not support dates before 1.1.1
-        # we have to subtract 366 days (because year 0 is a leap year)
-        number, size = super().decode(raw_data, index)
-        return EPOCH_DATE + timedelta(number - 366), size
-
-    @classmethod
-    def encode(cls, the_date):
-        return super().encode((the_date - EPOCH_DATE).days + 366)
+    def decode(self):
+        separator_index = self.raw_data.find(STRING_DELIMITER)
+        if separator_index == -1:
+            raise StringDecodeError('No separator found')
+        raw_string = self._raw_data[:separator_index]
+        try:
+            self._value = raw_string.decode(ENCODING)
+        except UnicodeDecodeError as e:
+                raise StringDecodeError(str(e))
+        self._raw_size = len(raw_string) + len(STRING_DELIMITER)
 
 
+# TODO fix these composite things
 class CompanyEconomy(CompositeType):
     """Contains economy information for a company"""
     _fields = [

@@ -5,10 +5,10 @@ import logging
 from struct import Struct, error as StructError
 
 # project
-import protocol
-# pack formats (all little endian)
 from const import AdminUpdateTypeStr, NetworkErrorCodeStr, PacketTypes
+import protocol
 
+# pack formats (all little endian)
 size_fmt = Struct('<H')  # 2 bytes
 type_fmt = Struct('<B')  # 1 byte
 size_len = size_fmt.size
@@ -52,10 +52,10 @@ class Packet:
     strict_magic_encode = False  # set this to True to have strict magic_encode
     strict_magic_decode = False  # set this to True to have strict magic_decode
 
-    pkt_size_type = protocol.UInt16             # the type of the package-size field
-    pkt_size_size = pkt_size_type.struct.size   # the size of the package-size field
-    pkt_type_type = protocol.UInt8              # the type of the package-type field
-    pkt_type_size = pkt_type_type.struct.size   # the size of the package-type field
+    pkt_size_field = protocol.UInt16             # the type of the package-size field
+    pkt_size_size = pkt_size_field.struct.size   # the size of the package-size field
+    pkt_type_field = protocol.UInt8              # the type of the package-type field
+    pkt_type_size = pkt_type_field.struct.size   # the size of the package-type field
 
     def __init__(self, size=None):
         self.size = size
@@ -87,16 +87,17 @@ class AdminPacket(Packet):
         """Encodes package according to _fields attribute"""
         try:
             for name, encoder in self._fields:
-                field = getattr(self, name)
-                if field is None:
+                value = getattr(self, name)
+                if value is None:
                     # we ignore None fields
-                    # this works because None (or null) is not a valid value to send over the network
+                    # this works because None (or null)
+                    # is not a valid value to send over the network
                     continue
                 if type(encoder) is type and issubclass(encoder, protocol.Type):
                     # It's a subclass of protocol.Type
-                    self._raw_data += encoder.encode(field)
+                    self._raw_data += encoder(value).raw_data
                 elif isinstance(encoder, str):
-                    self._raw_data += getattr(self, encoder)(field)
+                    self._raw_data += getattr(self, encoder)(value)
         except StructError as e:
             if self.strict_magic_encode:
                 raise PacketEncodeError(str(e))
@@ -120,22 +121,21 @@ class AdminPacket(Packet):
 
     def _get_encoded_packet_type(self):
         """Returns encoded packet type field"""
-        return self.pkt_type_type.encode(self.type_)
+        return self.pkt_type_field(value=self.type_).raw_data
 
     def _get_encoded_packet_size(self):
         """
-        Returns size of encoded package,
+        Returns size of encoded packet,
         this method must be called after the package payload has been encoded
         """
         # packet size is size + type + payload
         pkt_size = self.pkt_size_size + self.pkt_type_size + len(self._raw_data)
-        return self.pkt_size_type.encode(pkt_size)
+        return self.pkt_size_field(value=pkt_size).raw_data
 
 
 class ServerPacket(Packet):
     """Packets send by server"""
     log = logging.getLogger('ServerPacket')
-    log.setLevel(logging.DEBUG)
 
     def __init__(self, size, raw_data, *args, **kwargs):
         super().__init__(size, *args, **kwargs)
@@ -168,8 +168,9 @@ class ServerPacket(Packet):
         :param field_type: A protocol.Type subclass
         :returns: The decoded field
         """
-        decoded_field, size = field_type.decode(self.raw_data, self.index)
-        self.index += size
+        field = field_type(raw_data=self.raw_data[self.index:])
+        decoded_field = field.value
+        self.index += field.raw_size
         return decoded_field
 
     @classmethod
@@ -180,8 +181,8 @@ class ServerPacket(Packet):
         :param raw_data: bytes (including size bytes)
         """
         # getting packet type
-        packet_type = cls.pkt_type_type.decode(raw_data, index=2)[0]
-        raw_data = raw_data[cls.pkt_size_type.struct.size + cls.pkt_type_type.struct.size:packet_size]
+        packet_type = cls.pkt_type_field(raw_data=raw_data[2:]).value
+        raw_data = raw_data[cls.pkt_size_field.struct.size + cls.pkt_type_field.struct.size:packet_size]
         # looking for class to instantiate
         class_ = packet_map.get(packet_type, None)
         if class_ is None:
@@ -189,10 +190,7 @@ class ServerPacket(Packet):
             return UnknownServerPacket(packet_size, raw_data)
         # creating package
         p = class_(packet_size, raw_data)
-        try:
-            p.magic_decode()
-        except Exception as e:
-            cls.log.exception('Error while magic decoding %s', class_.__name__)
+        p.magic_decode()
         return p
 
 
@@ -277,7 +275,7 @@ class ServerProtocolPacket(ServerPacket):
     def _decode_supported_update_freqs(self):
         res = {}
         param_size = protocol.UInt8.struct.size + (protocol.UInt16.struct.size * 2)
-        while (self.index + param_size) <= len(self.raw_data):
+        while self.index + param_size <= len(self.raw_data):
             _ = self._decode_field(protocol.UInt8)  # separator
             key = self._decode_field(protocol.UInt16)
             value = self._decode_field(protocol.UInt16)
@@ -467,28 +465,34 @@ class ServerCompanyRemovePacket(ServerPacket):
 class ServerCompanyEconomyPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_ECONOMY
     _fields = [
-        ('companies_economy', '_decode_companies_economy'),
+        ('company_id',              protocol.UInt8),
+        ('money',                   protocol.SInt64),  # British Pound
+        ('current_loan',            protocol.UInt64),
+        ('income',                  protocol.SInt64),  # current year
+        ('delivered_cargo',         protocol.UInt16),  # current quarter
+        ('company_value_0',         protocol.UInt64),
+        ('performance_history_0',   protocol.UInt16),
+        ('delivered_cargo_0',       protocol.UInt16),
+        ('company_value_1',         protocol.UInt64),
+        ('performance_history_1',   protocol.UInt16),
+        ('delivered_cargo_1',       protocol.UInt16),    
     ]
-
-    def _decode_companies_economy(self):
-        """
-        This packet contains economy for all company,
-        we don't know the packet size in advance
-        :returns: A list of protocol.CompanyEconomy objects
-        """
-        res = []
-        while (self.index + protocol.CompanyEconomy.size) <= len(self.raw_data):
-            res.append(self._decode_field(protocol.CompanyEconomy))
-        return res
-
-    def pretty(self):
-        return '\n'.join(comp_eco.pretty() for comp_eco in self.companies_economy)
 
 
 class ServerCompanyStatsPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_STATS
     _fields = [
-        ('companies_stats', protocol.CompanyStats),
+        ('company_id',              protocol.UInt8),
+        ('train_vehicles_count',    protocol.UInt16),
+        ('lorry_vehicles_count',    protocol.UInt16),
+        ('bus_vehicles_count',      protocol.UInt16),
+        ('plane_vehicles_count',    protocol.UInt16),
+        ('ship_vehicles_count',     protocol.UInt16),
+        ('train_stations_count',    protocol.UInt16),
+        ('lorry_stations_count',    protocol.UInt16),
+        ('bus_stations_count',      protocol.UInt16),
+        ('plane_stations_count',    protocol.UInt16),
+        ('ship_stations_count',     protocol.UInt16),
     ]
 
 

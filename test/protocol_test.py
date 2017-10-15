@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # standard library
-import struct
+from datetime import date
 
 # related
 import pytest
@@ -11,6 +11,7 @@ from protocol import *
 
 VALUE_RESULT = 'value_result'
 RAW_DATA_RESULT = 'raw_data_result'
+FIELD_RESULT = 'field_result'
 
 
 def _test_encode(value_result, type_class):
@@ -22,7 +23,7 @@ def _test_encode(value_result, type_class):
             obj = type_class(value=value)
             obj.encode()
         except result:
-            pass  # ok
+            pass  # OK
         else:
             assert False, "Expected '%s' error did not occur" % str(result)
     else:
@@ -40,13 +41,28 @@ def _test_decode(raw_data_result, type_class):
             obj = type_class(raw_data=raw_data)
             obj.decode()
         except result:
-            pass  # ok
+            pass  # OK
         else:
             assert False, "Expected '%s' error did not occur" % str(result)
     else:
         # we just compare the values
         obj = type_class(raw_data=raw_data)
         assert obj.value == result, 'Decoded raw_data does not match'
+
+
+def _test_raw_size(field_result):
+    field, result = field_result
+    if type(result) is type and issubclass(result, Exception):
+        # we expect an error
+        try:
+            field.raw_data
+        except result:
+            pass  # OK
+        else:
+            assert False, "Expected '%s' error did not occur" % str(result)
+    else:
+        # we just compare the values
+        assert field.raw_size == result, 'Field raw_size does not match'
 
 
 # ##### UInt8 ################################################################
@@ -73,6 +89,14 @@ def test_uint8_decode(raw_data_result):
     _test_decode(raw_data_result, UInt8)
 
 
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (UInt8(value=1),            1),
+    (UInt8(raw_data=b'\x00'),   1),
+])
+def test_uint8_raw_size(field_result):
+    _test_raw_size(field_result)
+
+
 # ##### UInt16 ###############################################################
 @pytest.mark.parametrize(VALUE_RESULT, [
     (0,     b'\x00\x00'),
@@ -95,6 +119,14 @@ def test_uint16_encode(value_result):
 ])
 def test_uint16_decode(raw_data_result):
     _test_decode(raw_data_result, UInt16)
+
+
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (UInt16(value=1),                2),
+    (UInt16(raw_data=b'\x00\x00'),   2),
+])
+def test_uint16_raw_size(field_result):
+    _test_raw_size(field_result)
 
 
 # ##### UInt32 ###############################################################
@@ -121,6 +153,14 @@ def test_uint32_decode(raw_data_result):
     _test_decode(raw_data_result, UInt32)
 
 
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (UInt32(value=1),                       4),
+    (UInt32(raw_data=b'\x00\x00\x00\x00'),  4),
+])
+def test_uint32_raw_size(field_result):
+    _test_raw_size(field_result)
+
+
 # ##### UInt64 ###############################################################
 @pytest.mark.parametrize(VALUE_RESULT, [
     (0,             b'\x00\x00\x00\x00\x00\x00\x00\x00'),
@@ -143,6 +183,14 @@ def test_uint64_encode(value_result):
 ])
 def test_uint64_decode(raw_data_result):
     _test_decode(raw_data_result, UInt64)
+
+
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (UInt64(value=1),                                       8),
+    (UInt64(raw_data=b'\x00\x00\x00\x00\x00\x00\x00\x00'),  8),
+])
+def test_uint64_raw_size(field_result):
+    _test_raw_size(field_result)
 
 
 # ##### SInt64 ###############################################################
@@ -172,6 +220,14 @@ def test_sint64_decode(raw_data_result):
     _test_decode(raw_data_result, SInt64)
 
 
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (SInt64(value=1),                                       8),
+    (SInt64(raw_data=b'\x00\x00\x00\x00\x00\x00\x00\x00'),  8),
+])
+def test_sint64_raw_size(field_result):
+    _test_raw_size(field_result)
+
+
 # ##### Boolean ##############################################################
 @pytest.mark.parametrize(VALUE_RESULT, [
     (False, b'\x00'),
@@ -195,6 +251,14 @@ def test_boolean_decode(raw_data_result):
     _test_decode(raw_data_result, Boolean)
 
 
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (UInt8(value=1),            1),
+    (UInt8(raw_data=b'\x00'),   1),
+])
+def test_boolean_raw_size(field_result):
+    _test_raw_size(field_result)
+
+
 # ##### Date #################################################################
 @pytest.mark.parametrize(VALUE_RESULT, [
     (date(1, 1, 1),     UInt32(366).raw_data),
@@ -211,6 +275,14 @@ def test_date_encode(value_result):
 ])
 def test_date_decode(raw_data_result):
     _test_decode(raw_data_result, Date)
+
+
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (Date(value=date(1, 2, 3)), 4),
+    (Date(raw_data=Date(value=date(1, 2, 3)).raw_data),   4),
+])
+def test_date_raw_size(field_result):
+    _test_raw_size(field_result)
 
 
 # ##### String ###############################################################
@@ -232,3 +304,13 @@ def test_string_encode(value_result):
 ])
 def test_string_decode(raw_data_result):
     _test_decode(raw_data_result, String)
+
+
+@pytest.mark.parametrize(FIELD_RESULT, [
+    (String(value='éäönđß€łđnðæßĸł'),
+     len('éäönđß€łđnðæßĸł'.encode(ENCODING)) + len(STRING_DELIMITER)),
+    (String(raw_data='éäönđß€łđnðæßĸł'.encode(ENCODING) + STRING_DELIMITER),
+     len('éäönđß€łđnðæßĸł'.encode(ENCODING)) + len(STRING_DELIMITER))
+])
+def test_string_raw_size(field_result):
+    _test_raw_size(field_result)

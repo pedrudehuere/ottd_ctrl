@@ -65,9 +65,7 @@ class Type:
     @property
     def raw_size(self):
         """Size in bytes of the encoded value"""
-        if self._raw_size is None:
-            self.encode()
-        return self._raw_size
+        raise NotImplementedError('Must be implemented')
 
     def encode(self):
         """Sets value and size from decoded raw data"""
@@ -165,6 +163,12 @@ class String(Type):
         except UnicodeDecodeError as e:
                 raise StringDecodeError(str(e))
         self._raw_size = len(raw_string) + len(STRING_DELIMITER)
+
+    @property
+    def raw_size(self):
+        if self._raw_data is None:
+            self.encode()
+        return len(self._raw_data)
 
 
 # TODO fix these composite things

@@ -50,16 +50,17 @@ class Type:
         self._raw_data = raw_data
         self._raw_size = None
 
+        if self._value is not None:
+            self.encode()
+        else:
+            self.decode()
+
     @property
     def value(self):
-        if self._value is None:
-            self.decode()
         return self._value
 
     @property
     def raw_data(self):
-        if self._raw_data is None:
-            self.encode()
         return self._raw_data
 
     @property
@@ -102,6 +103,7 @@ class NumberType(Type):
             self._value = self.struct.unpack_from(self._raw_data)[0]
         except StructError as e:
             raise FieldDecodeError(str(e))
+        self._raw_data = self._raw_data[:self.raw_size]
 
     @property
     def raw_size(self):
@@ -136,6 +138,10 @@ class Boolean(NumberType):
 
     def decode(self):
         self._value = bool(UInt8(raw_data=self._raw_data).value)
+        # since we accept raw data as UInt8 we have to set it to
+        # 0x01 or 0x00 by calling encode()
+        self.encode()
+        self._raw_data = self._raw_data[:self.raw_size]
 
 
 class Date(NumberType):
@@ -146,6 +152,7 @@ class Date(NumberType):
 
     def decode(self):
         self._value = EPOCH_DATE + timedelta(days=UInt32(raw_data=self._raw_data).value - 366)
+        self._raw_data = self._raw_data[:self.raw_size]
 
 
 class String(Type):
@@ -163,12 +170,11 @@ class String(Type):
         except UnicodeDecodeError as e:
                 raise StringDecodeError(str(e))
         self._raw_size = len(raw_string) + len(STRING_DELIMITER)
+        self._raw_data = self._raw_data[:self._raw_size]
 
     @property
     def raw_size(self):
-        if self._raw_data is None:
-            self.encode()
-        return len(self._raw_data)
+        return self._raw_size
 
 
 # TODO fix these composite things

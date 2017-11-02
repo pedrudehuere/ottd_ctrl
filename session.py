@@ -12,6 +12,7 @@ import log
 import packet
 from const import AdminUpdateFrequencyStr, AdminUpdateTypeStr
 from const import PacketTypes, AdminUpdateType, AdminUpdateFrequency
+from const import NetworkErrorCodeStr
 
 
 class NotAllPacketReceived(Exception):
@@ -213,6 +214,7 @@ class Session:
             PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: self._on_new_game,
             PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN: self._on_server_shutdown,
             PacketTypes.ADMIN_PACKET_SERVER_CONSOLE: self._on_console,
+            PacketTypes.ADMIN_PACKET_SERVER_ERROR: self._on_server_error,
         }
         for packet_type, callback in callbacks.items():
             self.admin_client.register_callback(packet_type, callback, CallbackPrepend)
@@ -256,3 +258,6 @@ class Session:
 
     def _on_server_shutdown(self, pkt):
         log.info('Server shutdown')
+
+    def _on_server_error(self, pkt):
+        log.info('Error: %s', NetworkErrorCodeStr[pkt.error])

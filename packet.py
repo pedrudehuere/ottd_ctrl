@@ -512,6 +512,13 @@ class ServerConsolePacket(ServerPacket):
     ]
 
 
+class ServerErrorPackage(ServerPacket):
+    type_ = PacketTypes.ADMIN_PACKET_SERVER_ERROR
+    _fields = [
+        ('error', protocol.UInt8)  # NetworkErrorCode
+    ]
+
+
 # maps packet type with class, makes sense only for server packets
 packet_map = {
     PacketTypes.ADMIN_PACKET_ADMIN_JOIN: AdminJoinPacket,
@@ -524,7 +531,7 @@ packet_map = {
     PacketTypes.ADMIN_PACKET_ADMIN_PING: AdminPingPacket,
     PacketTypes.ADMIN_PACKET_SERVER_FULL: None,
     PacketTypes.ADMIN_PACKET_SERVER_BANNED: None,
-    PacketTypes.ADMIN_PACKET_SERVER_ERROR: None,
+    PacketTypes.ADMIN_PACKET_SERVER_ERROR: ServerErrorPackage,
     PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL: ServerProtocolPacket,
     PacketTypes.ADMIN_PACKET_SERVER_WELCOME: ServerWelcomePacket,
     PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: ServerNewGamePacket,

@@ -37,13 +37,13 @@ class AdminClient:
         self.port = server_port
         self.timeout_s = timeout_s if timeout_s is not None else DEFAULT_SOCKET_TIMEOUT_S
         self.socket = None
-        self.log = logging.getLogger("AdminClient")
+        self.log = logging.getLogger("admin-client")
         self.log.setLevel(logging.DEBUG)
         self.callbacks = defaultdict(list)
-        self.register_callbacks(callbacks or {})
+        self._register_callbacks(callbacks or {})
 
-    def register_callbacks(self, callbacks):
-        [[self.register_callback(pt, cb) for cb in cbs] for (pt, cbs) in callbacks.items()]
+    def _register_callbacks(self, callbacks):
+        [[self.register_callback(pt, cb, pos) for cb in cbs] for pt, (pos, cbs) in callbacks.items()]
 
     def register_callback(self, packet_type, callback, position=None):
         if position is None:
@@ -77,11 +77,12 @@ class AdminClient:
             self.socket = None
             self.log.info("Disconnected")
 
-    def send_packet(self, packet):
+    def send_packet(self, pkt):
+        self.log.debug('Sending %s', pkt.__class__.__name__)
         if self.socket is None:
             raise Exception("Cannot send if not connected")
         # TODO handle socket errors
-        self.socket.sendall(packet.encoded())
+        self.socket.sendall(pkt.encoded())
 
     def receive_packet(self):
         """Receives packet from network, calls registered callbacks"""

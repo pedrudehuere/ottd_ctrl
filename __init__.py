@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 import os.path
 
 # project
+from const import AdminUpdateType, AdminUpdateFrequency
 import log
 import server
 from session import Session
@@ -38,13 +39,16 @@ def parse_args():
     return ap.parse_args()
 
 
-def on_welcome(pkt):
-    log.info("Received welcome from server '%s'", pkt.server_name)
-
-
-def on_protocol(pkt):
-    log.info('Received protocol from server')
-
+# Date updates
+update_freqs = {
+    AdminUpdateType.ADMIN_UPDATE_DATE:              AdminUpdateFrequency.ADMIN_FREQUENCY_DAILY,
+    AdminUpdateType.ADMIN_UPDATE_CLIENT_INFO:       AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC,
+    AdminUpdateType.ADMIN_UPDATE_COMPANY_INFO:      AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC,
+    AdminUpdateType.ADMIN_UPDATE_COMPANY_ECONOMY:   AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY,
+    AdminUpdateType.ADMIN_UPDATE_COMPANY_STATS:     AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY,
+    AdminUpdateType.ADMIN_UPDATE_CHAT:              AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC,
+    AdminUpdateType.ADMIN_UPDATE_CONSOLE:           AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC,
+}
 
 if __name__ == '__main__':
     args = parse_args()
@@ -55,7 +59,7 @@ if __name__ == '__main__':
     paths = Paths(args.base_path)
 
     # starting OpenTTD server
-    with server.OpenTTDServer().started() as ottd_server:
+    with server.OpenTTDServer().stopping() as ottd_server:
         # starting admin client
         session_kwargs = {
             'client_name': 'ottd_ctrl',
@@ -63,27 +67,10 @@ if __name__ == '__main__':
             'client_version': '1',
             'server_host': 'localhost',
             'server_port': 3977,
-            'timeout_s': 10
+            'timeout_s': 10,
+            'update_frequencies': update_freqs,
         }
-        with Session(**session_kwargs).server_joined() as session:
-
-            # # registering callbacks
-            # session.admin_client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_WELCOME,
-            #                                        on_welcome)
-            # session.admin_client.register_callback(packet.PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL,
-            #                                        on_protocol)
-            #
-            #
-            # log.info("Working...")
-            # time.sleep(2)
-            #
-            # log.info("Asking for date")
-            #
-            # session.send_packet(packet.AdminPollPacket(update_type=packet.AdminUpdateType.ADMIN_UPDATE_DATE))
-            # the_date = session.receive_packet().date
-            #
-            # log.info('The date is: %s', the_date.strftime('%Y.%m.%d'))
-
+        with Session(**session_kwargs).quitting_server() as session:
             session.main_loop()
 
     log.info("End")

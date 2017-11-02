@@ -2,6 +2,7 @@
 
 # standard library
 from contextlib import contextmanager
+import logging
 import math
 from select import select
 import time
@@ -19,15 +20,30 @@ class NotAllPacketReceived(Exception):
     pass
 
 
-class Session:
+class Session(AdminClient):
     def __init__(self, client_name, password, client_version,
-                 server_host, server_port, timeout_s=None):
-        # TODO update frequencies as parameter?
+                 server_host, server_port,
+                 timeout_s=None, callbacks=None, update_frequencies=None):
+        super().__init__(server_host, server_port, timeout_s, callbacks)
+
+        self.log = logging.getLogger('session')
+        builtin_callbacks = {
+            None:                                       (CallbackPrepend, [self._on_packet]),
+            PacketTypes.ADMIN_PACKET_SERVER_WELCOME:    (CallbackPrepend, [self._on_welcome]),
+            PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL:   (CallbackPrepend, [self._on_protocol]),
+            PacketTypes.ADMIN_PACKET_SERVER_DATE:       (CallbackPrepend, [self._on_date]),
+            PacketTypes.ADMIN_PACKET_SERVER_RCON:       (CallbackPrepend, [self._on_rcon]),
+            PacketTypes.ADMIN_PACKET_SERVER_NEWGAME:    (CallbackPrepend, [self._on_new_game]),
+            PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN:   (CallbackPrepend, [self._on_server_shutdown]),
+            PacketTypes.ADMIN_PACKET_SERVER_CONSOLE:    (CallbackPrepend, [self._on_console]),
+            PacketTypes.ADMIN_PACKET_SERVER_ERROR:      (CallbackPrepend, [self._on_server_error]),
+        }
+        self._register_callbacks(builtin_callbacks)
+
         self.client_name = client_name
         self.password = password
         self.client_version = client_version
-
-        self.admin_client = AdminClient(server_host, server_port, timeout_s)
+        self._update_frequencies = update_frequencies
 
         self.welcome_packet = None
         self.protocol_packet = None
@@ -40,11 +56,11 @@ class Session:
         # Set when we send an rcon package
         self._current_rcon_request = None
 
-        self._register_callbacks()
-        self._set_update_frequencies()
+    def _set_update_frequencies(self, update_frequencies):
+        [self.set_update_frequency(*u_type_freq) for u_type_freq in update_frequencies.items()]
 
     @contextmanager
-    def server_joined(self):
+    def quitting_server(self):
         self.join_server()
         try:
             yield self
@@ -52,9 +68,9 @@ class Session:
             self.quit_server()
 
     def join_server(self):
-        if self.admin_client.is_connected:
+        if self.is_connected:
             raise Exception('Already connected to server')
-        self.admin_client.connect()
+        self.connect()
         self.send_packet(packet.AdminJoinPacket(password=self.password,
                                                 name=self.client_name,
                                                 version=self.client_version))
@@ -67,6 +83,9 @@ class Session:
                      self.server_name, self.server_version)
         else:
             log.error("Could not jon server")
+
+        # setting update frequencies
+        self._set_update_frequencies(self._update_frequencies)
 
     def send_rcon(self, command, timeout_s=5):
         """
@@ -111,12 +130,8 @@ class Session:
 
     def quit_server(self):
         self.send_packet(packet.AdminQuitPacket())
-        self.admin_client.disconnect()
+        self.disconnect()
         self._server_joined = False
-
-    def send_packet(self, pkt):
-        log.info('Sending %s', pkt.__class__.__name__)
-        self.admin_client.send_packet(pkt)
 
     def wait_for_packet(self, packet_type, timeout_s=None):
         """
@@ -151,10 +166,6 @@ class Session:
         else:
             raise TimeoutError()
 
-    def receive_packet(self):
-        # TODO capture ConnectionClosedByPeer
-        return self.admin_client.receive_packet()
-
     def receive_packets(self, nb=None, timeout_s=0):
         """
         Receives packets if there are some
@@ -163,61 +174,17 @@ class Session:
         """
         log.debug('receiving packets')
         nb_received = 0
-        rlist, wlist, xlist = select([self.admin_client.socket], [], [], timeout_s)
+        rlist, wlist, xlist = select([self.socket], [], [], timeout_s)
         while len(rlist) > 0:
             if nb is not None and nb_received >= nb:
                 break
             log.debug('socket ready for read')
             self.receive_packet()
             nb_received += 1
-            rlist, wlist, xlist = select([self.admin_client.socket], [], [], timeout_s)
+            rlist, wlist, xlist = select([self.socket], [], [], timeout_s)
         if nb is not None and nb_received < nb:
             raise NotAllPacketReceived()
         log.debug('nothing to read')
-
-    def _set_update_frequencies(self):
-        # Date updates
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_DATE,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_DAILY)
-
-        # Client updates
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CLIENT_INFO,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
-
-        # Companies updates
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_INFO,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
-
-        # Companies economy update
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_ECONOMY,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
-
-        # Companies economy update
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_STATS,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
-
-        # Chat
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CHAT,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
-
-        # Console
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CONSOLE,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
-
-    def _register_callbacks(self):
-        callbacks = {
-            None: self._on_packet,
-            PacketTypes.ADMIN_PACKET_SERVER_WELCOME: self._on_welcome,
-            PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL: self._on_protocol,
-            PacketTypes.ADMIN_PACKET_SERVER_DATE: self._on_date,
-            PacketTypes.ADMIN_PACKET_SERVER_RCON: self._on_rcon,
-            PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: self._on_new_game,
-            PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN: self._on_server_shutdown,
-            PacketTypes.ADMIN_PACKET_SERVER_CONSOLE: self._on_console,
-            PacketTypes.ADMIN_PACKET_SERVER_ERROR: self._on_server_error,
-        }
-        for packet_type, callback in callbacks.items():
-            self.admin_client.register_callback(packet_type, callback, CallbackPrepend)
 
     # we store data coming from server directly in the received packets
     @property

@@ -2,8 +2,9 @@
 
 # standard library
 from contextlib import contextmanager
-from time import sleep
+import math
 from select import select
+import time
 
 # project
 from admin_client import AdminClient, CallbackPrepend
@@ -35,6 +36,9 @@ class Session:
         self._server_joined = False
         self.current_date = None
 
+        # Set when we send an rcon package
+        self._current_rcon_request = None
+
         self._register_callbacks()
 
     @contextmanager
@@ -52,10 +56,13 @@ class Session:
         self.send_packet(packet.AdminJoinPacket(password=self.password,
                                                 name=self.client_name,
                                                 version=self.client_version))
-        self.receive_packets(2, timeout_s=2)
+        self.wait_for_packets(packet_types=[PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL,
+                                            PacketTypes.ADMIN_PACKET_SERVER_WELCOME],
+                              timeout_s=5)
 
         if self._server_joined:
-            log.info("Server '%s' joined, protocol version: %s", self.server_name, self.server_version)
+            log.info("Server '%s' joined, protocol version: %s",
+                     self.server_name, self.server_version)
         else:
             log.error("Could not jon server")
 
@@ -71,7 +78,7 @@ class Session:
         self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_INFO,
                                   AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
 
-        #Companies economy update
+        # Companies economy update
         self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_ECONOMY,
                                   AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
 
@@ -80,6 +87,28 @@ class Session:
                                   AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
 
         # TODO send update frequencies
+
+    def send_rcon(self, command, timeout_s=5):
+        """
+        Sends an rcon command, returns the result
+        :param command:
+        :return:
+        """
+        if self._current_rcon_request is not None:
+            log.error('Sending RCON while RCON request in progress')
+        pkt = packet.AdminRConPacket(command=command)
+        self.send_packet(pkt)
+        self._current_rcon_request = {
+            'packet': pkt,
+            'results': []
+        }
+        pkt = self.wait_for_packet(PacketTypes.ADMIN_PACKET_SERVER_RCON_END, timeout_s)
+        log.debug("Result for RCON command '%s': ", command)
+        for line in self._current_rcon_request['results']:
+            log.info(line)
+        results = self._current_rcon_request['results']
+        self._current_rcon_request = None
+        return results
 
     def set_update_frequency(self, update_type, update_frequency):
         """Checks if given frequency is supported by server, if not raises an error"""
@@ -108,6 +137,39 @@ class Session:
     def send_packet(self, pkt):
         log.info('Sending %s', pkt.__class__.__name__)
         self.admin_client.send_packet(pkt)
+
+    def wait_for_packet(self, packet_type, timeout_s=None):
+        """
+        Receives packets, returns once a packet of given type is received
+        """
+        remaining_s = timeout_s if timeout_s is not None else math.inf
+        while remaining_s > 0:
+            start_time = time.time()
+            pkt = self.receive_packet()
+            if pkt.type_ == packet_type:
+                return packet
+            elapsed_s = time.time() - start_time
+            remaining_s -= elapsed_s
+        else:
+            raise TimeoutError()
+
+    def wait_for_packets(self, packet_types, timeout_s=None):
+        """
+        Waits until at least one of each packet types have been received
+        """
+        received_packets = {}
+        packets_to_receive = set(packet_types)
+        remaining_s = timeout_s if timeout_s is not None else math.inf
+        while remaining_s > 0:
+            pkt = self.receive_packet()
+            packet_type = pkt.type_
+            packets_to_receive.discard(packet_type)
+            if packet_type in packet_types:
+                received_packets.setdefault(packet_type, []).append(pkt)
+            if len(packets_to_receive) == 0:
+                return received_packets
+        else:
+            raise TimeoutError()
 
     def receive_packet(self):
         # TODO capture ConnectionClosedByPeer
@@ -139,6 +201,7 @@ class Session:
             PacketTypes.ADMIN_PACKET_SERVER_WELCOME: self._on_welcome,
             PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL: self._on_protocol,
             PacketTypes.ADMIN_PACKET_SERVER_DATE: self._on_date,
+            PacketTypes.ADMIN_PACKET_SERVER_RCON: self._on_rcon,
         }
         for packet_type, callback in callbacks.items():
             self.admin_client.register_callback(packet_type, callback, CallbackPrepend)
@@ -166,3 +229,10 @@ class Session:
 
     def _on_date(self, pkt):
         self.current_date = pkt.date
+
+    def _on_rcon(self, pkt):
+        if self._current_rcon_request is None:
+            log.error('Received unexpected rcon result')
+        else:
+            # TODO colour
+            self._current_rcon_request['results'].append(pkt.result)

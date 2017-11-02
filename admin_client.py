@@ -35,7 +35,7 @@ class AdminClient:
         """
         self.host = server_host
         self.port = server_port
-        self.timeout_s = timeout_s or DEFAULT_SOCKET_TIMEOUT_S
+        self.timeout_s = timeout_s if timeout_s is not None else DEFAULT_SOCKET_TIMEOUT_S
         self.socket = None
         self.log = logging.getLogger("AdminClient")
         self.log.setLevel(logging.DEBUG)
@@ -67,7 +67,7 @@ class AdminClient:
             self.disconnect()
 
     def connect(self):
-        self.socket = socket.create_connection((self.host, self.port))#, timeout=self.timeout_s)
+        self.socket = socket.create_connection((self.host, self.port), timeout=self.timeout_s)
         self.log.info("Connected to %s:%s", self.host, self.port)
 
     def disconnect(self):

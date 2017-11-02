@@ -4,11 +4,9 @@
 # standard library
 from argparse import ArgumentParser
 import os.path
-import time
 
 # project
 import log
-import packet
 import server
 from session import Session
 

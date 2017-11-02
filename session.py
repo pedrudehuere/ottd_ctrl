@@ -40,6 +40,7 @@ class Session:
         self._current_rcon_request = None
 
         self._register_callbacks()
+        self._set_update_frequencies()
 
     @contextmanager
     def server_joined(self):
@@ -65,28 +66,6 @@ class Session:
                      self.server_name, self.server_version)
         else:
             log.error("Could not jon server")
-
-        # Date updates
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_DATE,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_DAILY)
-
-        # Client updates
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CLIENT_INFO,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
-
-        # Companies updates
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_INFO,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
-
-        # Companies economy update
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_ECONOMY,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
-
-        # Companies economy update
-        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_STATS,
-                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
-
-        # TODO send update frequencies
 
     def send_rcon(self, command, timeout_s=5):
         """
@@ -195,6 +174,35 @@ class Session:
             raise NotAllPacketReceived()
         log.debug('nothing to read')
 
+    def _set_update_frequencies(self):
+        # Date updates
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_DATE,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_DAILY)
+
+        # Client updates
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CLIENT_INFO,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
+
+        # Companies updates
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_INFO,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
+
+        # Companies economy update
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_ECONOMY,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
+
+        # Companies economy update
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_COMPANY_STATS,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_WEEKLY)
+
+        # Chat
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CHAT,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
+
+        # Console
+        self.set_update_frequency(AdminUpdateType.ADMIN_UPDATE_CONSOLE,
+                                  AdminUpdateFrequency.ADMIN_FREQUENCY_AUTOMATIC)
+
     def _register_callbacks(self):
         callbacks = {
             None: self._on_packet,
@@ -204,6 +212,7 @@ class Session:
             PacketTypes.ADMIN_PACKET_SERVER_RCON: self._on_rcon,
             PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: self._on_new_game,
             PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN: self._on_server_shutdown,
+            PacketTypes.ADMIN_PACKET_SERVER_CONSOLE: self._on_console,
         }
         for packet_type, callback in callbacks.items():
             self.admin_client.register_callback(packet_type, callback, CallbackPrepend)
@@ -238,6 +247,9 @@ class Session:
         else:
             # TODO colour
             self._current_rcon_request['results'].append(pkt.result)
+
+    def _on_console(self, pkt):
+        log.debug('Origin: %s, string: %s', pkt.origin, pkt.string)
 
     def _on_new_game(self, pkt):
         log.info('New game')

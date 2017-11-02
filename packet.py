@@ -504,6 +504,14 @@ class ServerShutdownPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN
 
 
+class ServerConsolePacket(ServerPacket):
+    type_ = PacketTypes.ADMIN_PACKET_SERVER_CONSOLE
+    _fields = [
+        ('origin', protocol.String),
+        ('string', protocol.String),
+    ]
+
+
 # maps packet type with class, makes sense only for server packets
 packet_map = {
     PacketTypes.ADMIN_PACKET_ADMIN_JOIN: AdminJoinPacket,
@@ -535,7 +543,7 @@ packet_map = {
     PacketTypes.ADMIN_PACKET_SERVER_COMPANY_STATS: ServerCompanyStatsPacket,
     PacketTypes.ADMIN_PACKET_SERVER_CHAT: ServerChatPacket,
     PacketTypes.ADMIN_PACKET_SERVER_RCON: ServerRConPacket,
-    PacketTypes.ADMIN_PACKET_SERVER_CONSOLE: None,
+    PacketTypes.ADMIN_PACKET_SERVER_CONSOLE: ServerConsolePacket,
     PacketTypes.ADMIN_PACKET_SERVER_CMD_NAMES: None,
     PacketTypes.ADMIN_PACKET_SERVER_CMD_LOGGING: None,
     PacketTypes.ADMIN_PACKET_SERVER_GAMESCRIPT: ServerGameScriptPacket,

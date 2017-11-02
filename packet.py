@@ -496,6 +496,14 @@ class ServerCompanyStatsPacket(ServerPacket):
     ]
 
 
+class ServerNewGamePacket(ServerPacket):
+    type_ = PacketTypes.ADMIN_PACKET_SERVER_NEWGAME
+
+
+class ServerShutdownPacket(ServerPacket):
+    type_ = PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN
+
+
 # maps packet type with class, makes sense only for server packets
 packet_map = {
     PacketTypes.ADMIN_PACKET_ADMIN_JOIN: AdminJoinPacket,
@@ -511,8 +519,8 @@ packet_map = {
     PacketTypes.ADMIN_PACKET_SERVER_ERROR: None,
     PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL: ServerProtocolPacket,
     PacketTypes.ADMIN_PACKET_SERVER_WELCOME: ServerWelcomePacket,
-    PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: None,
-    PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN: None,
+    PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: ServerNewGamePacket,
+    PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN: ServerShutdownPacket,
     PacketTypes.ADMIN_PACKET_SERVER_DATE: ServerDatePacket,
     PacketTypes.ADMIN_PACKET_SERVER_CLIENT_JOIN: ServerClientJoinPacket,
     PacketTypes.ADMIN_PACKET_SERVER_CLIENT_INFO: ServerClientInfoPacket,

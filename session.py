@@ -202,6 +202,8 @@ class Session:
             PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL: self._on_protocol,
             PacketTypes.ADMIN_PACKET_SERVER_DATE: self._on_date,
             PacketTypes.ADMIN_PACKET_SERVER_RCON: self._on_rcon,
+            PacketTypes.ADMIN_PACKET_SERVER_NEWGAME: self._on_new_game,
+            PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN: self._on_server_shutdown,
         }
         for packet_type, callback in callbacks.items():
             self.admin_client.register_callback(packet_type, callback, CallbackPrepend)
@@ -236,3 +238,9 @@ class Session:
         else:
             # TODO colour
             self._current_rcon_request['results'].append(pkt.result)
+
+    def _on_new_game(self, pkt):
+        log.info('New game')
+
+    def _on_server_shutdown(self, pkt):
+        log.info('Server shutdown')

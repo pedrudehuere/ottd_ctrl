@@ -8,12 +8,11 @@ from select import select
 import time
 
 # project
-from admin_client import AdminClient, CallbackPrepend
-import log
-import packet
-from const import AdminUpdateFrequencyStr, AdminUpdateTypeStr
-from const import PacketTypes, AdminUpdateType, AdminUpdateFrequency
-from const import NetworkErrorCodeStr
+from .admin_client import AdminClient, CallbackPrepend
+from . import packet
+from .const import AdminUpdateFrequencyStr, AdminUpdateTypeStr
+from .const import PacketTypes
+from .const import NetworkErrorCodeStr
 
 
 class NotAllPacketReceived(Exception):
@@ -37,6 +36,10 @@ class Session(AdminClient):
             PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN:   (CallbackPrepend, [self._on_server_shutdown]),
             PacketTypes.ADMIN_PACKET_SERVER_CONSOLE:    (CallbackPrepend, [self._on_console]),
             PacketTypes.ADMIN_PACKET_SERVER_ERROR:      (CallbackPrepend, [self._on_server_error]),
+            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_JOIN:(CallbackPrepend, [self._on_client_join]),
+            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_INFO:(CallbackPrepend, [self._on_client_info]),
+            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_UPDATE: (CallbackPrepend, [self._on_client_update]),
+            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_QUIT: (CallbackPrepend, [self._on_client_quit]),
         }
         self._register_callbacks(builtin_callbacks)
 
@@ -50,11 +53,14 @@ class Session(AdminClient):
 
         self.supported_update_frequencies = None
 
+        self.stop = False
         self._server_joined = False
         self.current_date = None
 
         # Set when we send an rcon package
         self._current_rcon_request = None
+
+        self.connected_clients = {}  # by client ID
 
     def _set_update_frequencies(self, update_frequencies):
         [self.set_update_frequency(*u_type_freq) for u_type_freq in update_frequencies.items()]
@@ -79,10 +85,10 @@ class Session(AdminClient):
                               timeout_s=5)
 
         if self._server_joined:
-            log.info("Server '%s' joined, protocol version: %s",
+            self.log.info("Server '%s' joined, protocol version: %s",
                      self.server_name, self.server_version)
         else:
-            log.error("Could not jon server")
+            self.log.error("Could not jon server")
 
         # setting update frequencies
         self._set_update_frequencies(self._update_frequencies)
@@ -94,7 +100,7 @@ class Session(AdminClient):
         :return:
         """
         if self._current_rcon_request is not None:
-            log.error('Sending RCON while RCON request in progress')
+            self.log.error('Sending RCON while RCON request in progress')
         pkt = packet.AdminRConPacket(command=command)
         self.send_packet(pkt)
         self._current_rcon_request = {
@@ -102,9 +108,9 @@ class Session(AdminClient):
             'results': []
         }
         pkt = self.wait_for_packet(PacketTypes.ADMIN_PACKET_SERVER_RCON_END, timeout_s)
-        log.debug("Result for RCON command '%s': ", command)
+        self.log.debug("Result for RCON command '%s': ", command)
         for line in self._current_rcon_request['results']:
-            log.info(line)
+            self.log.info(line)
         results = self._current_rcon_request['results']
         self._current_rcon_request = None
         return results
@@ -121,11 +127,10 @@ class Session(AdminClient):
             self.send_packet(packet.AdminUpdateFrequenciesPacket(update_type=update_type,
                                                                  update_frequency=update_frequency))
         else:
-            log.warning('Setting update frequencies without knowing supported frequencies')
+            self.log.warning('Setting update frequencies without knowing supported frequencies')
 
     def main_loop(self):
-        stop = False
-        while not stop:
+        while not self.stop:
             self.receive_packets(timeout_s=5)
 
     def quit_server(self):
@@ -172,19 +177,19 @@ class Session(AdminClient):
         :param timeout_s: Timeout in seconds for receiving each packet
         :param nb: Number of packets to receive, if None we just receive what's there
         """
-        log.debug('receiving packets')
+        self.log.debug('receiving packets')
         nb_received = 0
         rlist, wlist, xlist = select([self.socket], [], [], timeout_s)
-        while len(rlist) > 0:
+        while len(rlist) > 0 and not self.stop:
             if nb is not None and nb_received >= nb:
                 break
-            log.debug('socket ready for read')
+            self.log.debug('socket ready for read')
             self.receive_packet()
             nb_received += 1
             rlist, wlist, xlist = select([self.socket], [], [], timeout_s)
         if nb is not None and nb_received < nb:
             raise NotAllPacketReceived()
-        log.debug('nothing to read')
+        self.log.debug('nothing to read')
 
     # we store data coming from server directly in the received packets
     @property
@@ -197,7 +202,7 @@ class Session(AdminClient):
 
     # #### callback on packet reception ######################################
     def _on_packet(self, pkt):
-        log.debug('Received %s: %s', pkt.__class__.__name__, pkt.pretty())
+        self.log.debug('Received %s: %s', pkt.__class__.__name__, pkt.pretty())
 
     def _on_welcome(self, pkt):
         self.welcome_packet = pkt
@@ -212,19 +217,38 @@ class Session(AdminClient):
 
     def _on_rcon(self, pkt):
         if self._current_rcon_request is None:
-            log.error('Received unexpected rcon result')
+            self.log.error('Received unexpected rcon result')
         else:
             # TODO colour
             self._current_rcon_request['results'].append(pkt.result)
 
     def _on_console(self, pkt):
-        log.debug('Origin: %s, string: %s', pkt.origin, pkt.string)
+        self.log.debug('Origin: %s, string: %s', pkt.origin, pkt.string)
 
     def _on_new_game(self, pkt):
-        log.info('New game')
+        self.log.info('New game')
 
     def _on_server_shutdown(self, pkt):
-        log.info('Server shutdown')
+        self.stop = True
+        self.log.info('Server shutdown')
 
     def _on_server_error(self, pkt):
-        log.info('Error: %s', NetworkErrorCodeStr[pkt.error])
+        self.log.info('Error: %s', NetworkErrorCodeStr[pkt.error])
+
+    def _on_client_join(self, pkt):
+        self.connected_clients[pkt.client_id] = None
+
+    def _on_client_info(self, pkt):
+        self.connected_clients[pkt.client_id] = pkt
+
+    def _on_client_update(self, pkt):
+        pass
+
+    def _on_client_quit(self, pkt):
+        try:
+            del self.connected_clients[pkt.client_id]
+        except KeyError:
+            self.log.exception('Client that quit was unknown')
+
+    def log_connected_clients(self):
+        self.log.info('Connected clients: {}', self.connected_clients)

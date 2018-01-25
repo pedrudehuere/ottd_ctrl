@@ -2,12 +2,11 @@
 
 # standard library
 from datetime import date, timedelta
-from enum import Enum
 from pprint import pformat
 from struct import Struct, error as StructError
 
 # project
-from const import NetworkVehicleType, NetworkVehicleTypeStr
+from ottd_ctrl.const import NetworkVehicleType, NetworkVehicleTypeStr
 
 ZERO_BYTE = b'\x00'
 ENCODING = 'utf8'  # TODO verify
@@ -82,7 +81,7 @@ class CompositeType(Type):
     _fields = []
 
     def pretty(self):
-        # TODO test
+        # TODO tests
         return pformat({f[0]: getattr(self, f[0]) for f in self._fields})
 
 

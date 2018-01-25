@@ -1,13 +1,10 @@
-# compiled files
 __pycache__
 *.py[oc]
+*.egg-info
 
-# point files
 .*
-# expect for me
 !.gitignore
 
-# log files
 *.log
 *.out
 *.err

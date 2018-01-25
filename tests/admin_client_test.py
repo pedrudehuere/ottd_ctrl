@@ -6,7 +6,7 @@
 import pytest
 
 # project
-from admin_client import AdminClient, CallbackAppend, CallbackPrepend
+from ottd_ctrl.admin_client import AdminClient, CallbackAppend, CallbackPrepend
 
 
 @pytest.mark.parametrize('callbacks_expected', [

@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 
 # standard library
-from datetime import date
 
 # related
 import pytest
 
 # project
-import packet
-from protocol import *
+from ottd_ctrl import packet
+from ottd_ctrl.protocol import *
 
 
 @pytest.mark.parametrize('params', [
@@ -61,7 +60,7 @@ def test_admin_packet_magic_encode():
         ]
 
     values = {
-        # TODO test None values
+        # TODO tests None values
         'boolean_field':        True,
         'date_field':           date(1985, 5, 7),
         'string_field':         'öä£đßŋ{}đðł{',

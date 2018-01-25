@@ -8,8 +8,8 @@ import logging
 import socket
 
 # project
-from const import PacketTypesStr
-import packet
+from ottd_ctrl.const import PacketTypesStr
+from ottd_ctrl import packet
 
 DEFAULT_SOCKET_TIMEOUT_S = 5
 
@@ -43,7 +43,9 @@ class AdminClient:
         self._register_callbacks(callbacks or {})
 
     def _register_callbacks(self, callbacks):
-        [[self.register_callback(pt, cb, pos) for cb in cbs] for pt, (pos, cbs) in callbacks.items()]
+        [[self.register_callback(pt, cb, pos)
+          for cb in cbs]
+         for pt, (pos, cbs) in callbacks.items()]
 
     def register_callback(self, packet_type, callback, position=None):
         if position is None:
@@ -72,7 +74,11 @@ class AdminClient:
 
     def disconnect(self):
         if self.socket is not None:
-            self.socket.shutdown(socket.SHUT_RDWR)
+            try:
+                # if the server already disconnected we have Errno 107
+                self.socket.shutdown(socket.SHUT_RDWR)
+            except OSError as e:
+                self.log.error('Disconnecting: %s', e)
             self.socket.close()
             self.socket = None
             self.log.info("Disconnected")

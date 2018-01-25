@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
 # standard library
-from datetime import date
 
 # related
 import pytest
 
 # project
-from protocol import *
+from ottd_ctrl.protocol import *
 
 VALUE_RESULT = 'value_result'
 RAW_DATA_RESULT = 'raw_data_result'
@@ -16,7 +15,7 @@ DATA_RESULTS = 'data_results'
 
 
 def _test_encode(value_result, type_class):
-    """Generic encoding test"""
+    """Generic encoding tests"""
     value, result = value_result
     if type(result) is type and issubclass(result, Exception):
         # we expect an error
@@ -34,7 +33,7 @@ def _test_encode(value_result, type_class):
 
 
 def _test_decode(raw_data_result, type_class):
-    """Generic decoding test"""
+    """Generic decoding tests"""
     raw_data, result = raw_data_result
     if type(result) is type and issubclass(result, Exception):
         # we expect an error
@@ -119,7 +118,7 @@ def test_uint8_raw_data(data_results):
     (1,     b'\x01\x00'),
     (65535, b'\xFF\xFF'),
     (65536, FieldEncodeError),
-    (-1,   FieldEncodeError)
+    (-1,    FieldEncodeError)
 ])
 def test_uint16_encode(value_result):
     _test_encode(value_result, UInt16)

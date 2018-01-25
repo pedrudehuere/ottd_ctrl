@@ -13,15 +13,13 @@ import time
 # related
 import sh
 
-# project
-import log
-
 
 class OpenTTDServer:
     def __init__(self,
                  out_log='openttd_server.out',
                  err_log='openttd_server.err',
-                 start_stop_time=2):
+                 start_stop_time=2,
+                 config_file=None):
         """
         :param out_log: stdout redirection
         :param err_log: stderr redirection
@@ -30,6 +28,8 @@ class OpenTTDServer:
         # stdout and stderr redirection
         self.out_log = out_log
         self.err_log = err_log
+        # configuration file
+        self._config_file = config_file
         # We sleep this amount of seconds after starting and stopping the server
         self.start_stop_time_s = start_stop_time
         # True if the server has been started (and not stopped)
@@ -58,15 +58,19 @@ class OpenTTDServer:
         assert self.running is False, "Server already running"
         self.running = True
         self.log.info("Starting")
+
+        args = ['-D']  # dedicated server
+        if self._config_file is not None:
+            args.extend(['-c', self._config_file])
         try:
-            self.process = sh.openttd('-D',
+            self.process = sh.openttd(*args,
                                       _out='openttd_server.out',
                                       _err='openttd_server.err',
                                       _bg=True,
                                       _done=self._server_stopped)
         except Exception:
             # TODO be more specific
-            log.exception("Error while starting OpenTTD server")
+            self.log.exception("Error while starting OpenTTD server")
             self.running = False
         time.sleep(self.start_stop_time_s)
         if not self.running:
@@ -81,12 +85,17 @@ class OpenTTDServer:
             self.process.signal(signal.SIGINT)
             time.sleep(self.start_stop_time_s)
 
-    def _server_stopped(self, *args, **kwargs):
-        """Called when server stops"""
+    def _server_stopped(self, command, success, exit_code):
+        """Called when server stops (in another thread)"""
+        if exit_code < 0:
+            self.log.error('Terminated by signal %s', exit_code)
+        elif exit_code > 0:
+            self.log.error('Terminated with exit code %s', exit_code)
         if self._stopping:
+            # we are stopping the server, that's OK
             self.log.info("Stopped")
         else:
-            self.log.error("Stopped")
+            self.log.error("Unexpectedly stopped")
             # TODO some better message
         self._stopping = False
         self.running = False

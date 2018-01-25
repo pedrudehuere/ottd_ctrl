@@ -5,8 +5,8 @@ import logging
 from struct import Struct, error as StructError
 
 # project
-from const import AdminUpdateTypeStr, NetworkErrorCodeStr, PacketTypes
-import protocol
+from ottd_ctrl.const import AdminUpdateTypeStr, NetworkErrorCodeStr, PacketTypes
+from ottd_ctrl.protocol import Boolean, Date, String, SInt64, Type, UInt8, UInt16, UInt32, UInt64
 
 # pack formats (all little endian)
 size_fmt = Struct('<H')  # 2 bytes
@@ -42,7 +42,7 @@ class Packet:
     """
     A packet to be sent or received trough the admin TCP connection
 
-    The _field attribute allows for a declarative description
+    The _fields attribute allows for a declarative description
     of the packet format
 
     ** TODO explain _field format **
@@ -52,9 +52,9 @@ class Packet:
     strict_magic_encode = False  # set this to True to have strict magic_encode
     strict_magic_decode = False  # set this to True to have strict magic_decode
 
-    pkt_size_field = protocol.UInt16             # the type of the package-size field
+    pkt_size_field = UInt16             # the type of the package-size field
     pkt_size_size = pkt_size_field.struct.size   # the size of the package-size field
-    pkt_type_field = protocol.UInt8              # the type of the package-type field
+    pkt_type_field = UInt8              # the type of the package-type field
     pkt_type_size = pkt_type_field.struct.size   # the size of the package-type field
 
     def __init__(self, size=None):
@@ -93,7 +93,7 @@ class AdminPacket(Packet):
                     # this works because None (or null)
                     # is not a valid value to send over the network
                     continue
-                if type(encoder) is type and issubclass(encoder, protocol.Type):
+                if type(encoder) is type and issubclass(encoder, Type):
                     # It's a subclass of protocol.Type
                     self._raw_data += encoder(value).raw_data
                 elif isinstance(encoder, str):
@@ -147,7 +147,7 @@ class ServerPacket(Packet):
     def magic_decode(self):
         try:
             for name, decoder in self._fields:
-                if type(decoder) is type and issubclass(decoder, protocol.Type):
+                if type(decoder) is type and issubclass(decoder, Type):
                     # if it is a class and an instance of proto.Type we decode it
                     setattr(self, name, self._decode_field(decoder))
                 elif isinstance(decoder, str):
@@ -198,9 +198,9 @@ class ServerPacket(Packet):
 class AdminJoinPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_JOIN
     _fields = [
-        ('password',    protocol.String),
-        ('name',        protocol.String),
-        ('version',     protocol.String),
+        ('password',    String),
+        ('name',        String),
+        ('version',     String),
     ]
 
 
@@ -212,47 +212,47 @@ class AdminQuitPacket(AdminPacket):
 class AdminChatPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_CHAT
     _fields = [
-        ('network_action',   protocol.UInt8),  # a chat NetworkAction value
-        ('destination_type', protocol.UInt8),  # a DestType value
-        ('destination',      protocol.UInt32),
-        ('message',          protocol.String),
+        ('network_action',   UInt8),  # a chat NetworkAction value
+        ('destination_type', UInt8),  # a DestType value
+        ('destination',      UInt32),
+        ('message',          String),
     ]
 
 
 class AdminPollPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_POLL
     _fields = [
-        ('update_type', protocol.UInt8),  # AdminUpdateType value
-        ('d1',          protocol.UInt32),
+        ('update_type', UInt8),  # AdminUpdateType value
+        ('d1',          UInt32),
     ]
 
 
 class AdminRConPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_RCON
     _fields = [
-        ('command', protocol.String),
+        ('command', String),
     ]
 
 
 class AdminUpdateFrequenciesPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_UPDATE_FREQUENCY
     _fields = [
-        ('update_type', protocol.UInt16),  # a value of AdminUpdateType
-        ('update_frequency', protocol.UInt16),  # a value of AdminUpdateFrequency
+        ('update_type', UInt16),  # a value of AdminUpdateType
+        ('update_frequency', UInt16),  # a value of AdminUpdateFrequency
     ]
 
 
 class AdminPingPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_PING
     _fields = [
-        ('data', protocol.UInt32),  # Just a number we will receive back from server (PONG)
+        ('data', UInt32),  # Just a number we will receive back from server (PONG)
     ]
 
 
 class AdminGameScriptPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_GAMESCRIPT
     _fields = [
-        ('json_string', protocol.String),
+        ('json_string', String),
     ]
 
 
@@ -268,19 +268,19 @@ class UnknownServerPacket(ServerPacket):
 class ServerProtocolPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL
     _fields = [
-        ('version', protocol.UInt8),
+        ('version', UInt8),
         ('supported_update_freqs', '_decode_supported_update_freqs')
     ]
 
     def _decode_supported_update_freqs(self):
         res = {}
-        param_size = protocol.UInt8.struct.size + (protocol.UInt16.struct.size * 2)
+        param_size = UInt8.struct.size + (UInt16.struct.size * 2)
         while self.index + param_size <= len(self.raw_data):
-            _ = self._decode_field(protocol.UInt8)  # separator
-            key = self._decode_field(protocol.UInt16)
-            value = self._decode_field(protocol.UInt16)
+            _ = self._decode_field(UInt8)  # separator
+            key = self._decode_field(UInt16)
+            value = self._decode_field(UInt16)
             res[key] = value
-        _ = self._decode_field(protocol.UInt8)  # final separator
+        _ = self._decode_field(UInt8)  # final separator
         return res
 
     def pretty(self):
@@ -292,44 +292,44 @@ class ServerProtocolPacket(ServerPacket):
 class ServerWelcomePacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_WELCOME
     _fields = [
-        ('server_name',         protocol.String),
-        ('openttd_revision',    protocol.String),
-        ('is_dedicated',        protocol.Boolean),
-        ('map_name',            protocol.String),
-        ('generation_seed',     protocol.UInt32),
-        ('landscape',           protocol.UInt8),
-        ('game_creation_date',  protocol.Date),
-        ('map_size_x',          protocol.UInt16),
-        ('map_size_y',          protocol.UInt16),
+        ('server_name',         String),
+        ('openttd_revision',    String),
+        ('is_dedicated',        Boolean),
+        ('map_name',            String),
+        ('generation_seed',     UInt32),
+        ('landscape',           UInt8),
+        ('game_creation_date',  Date),
+        ('map_size_x',          UInt16),
+        ('map_size_y',          UInt16),
     ]
 
 
 class ServerDatePacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_DATE
     _fields = [
-        ('date', protocol.Date),
+        ('date', Date),
     ]
 
 
 class ServerRConEndPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_RCON_END
     _fields = [
-        ('command', protocol.String),
+        ('command', String),
     ]
 
 
 class ServerRConPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_RCON
     _fields = [
-        ('colour', protocol.UInt16),
-        ('result', protocol.String),
+        ('colour', UInt16),
+        ('result', String),
     ]
 
 
 class ServerErrorPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_ERROR
     _fields = [
-        ('error', protocol.UInt8),
+        ('error', UInt8),
     ]
 
     def pretty(self):
@@ -339,96 +339,96 @@ class ServerErrorPacket(ServerPacket):
 class ServerPongPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_PONG
     _fields = [
-        ('data', protocol.UInt32)
+        ('data', UInt32)
     ]
 
 
 class ServerGameScriptPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_GAMESCRIPT
     _fields = [
-        ('json_string', protocol.String),
+        ('json_string', String),
     ]
 
 
 class ServerChatPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CHAT
     _fields = [
-        ('network_action',      protocol.UInt8),
-        ('destination_type',    protocol.UInt8),
-        ('client_id',           protocol.UInt32),
-        ('message',             protocol.String),
-        ('data',                protocol.UInt64),
+        ('network_action',      UInt8),
+        ('destination_type',    UInt8),
+        ('client_id',           UInt32),
+        ('message',             String),
+        ('data',                UInt64),
     ]
 
 
 class ServerClientJoinPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CLIENT_JOIN
     _fields = [
-        ('client_id', protocol.UInt32),
+        ('client_id', UInt32),
     ]
 
 
 class ServerClientInfoPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CLIENT_INFO
     _fields = [
-        ('client_id',       protocol.UInt32),
-        ('client_address',  protocol.String),
-        ('client_name',     protocol.String),
-        ('client_lang',     protocol.UInt8),
-        ('join_date',       protocol.Date),
-        ('client_play_as',  protocol.UInt8),
+        ('client_id',       UInt32),
+        ('client_address',  String),
+        ('client_name',     String),
+        ('client_lang',     UInt8),
+        ('join_date',       Date),
+        ('client_play_as',  UInt8),
     ]
 
 
 class ServerClientUpdatePacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CLIENT_UPDATE
     _fields = [
-        ('client_id',       protocol.UInt32),
-        ('client_name',     protocol.String),
-        ('client_play_as',  protocol.UInt8),
+        ('client_id',       UInt32),
+        ('client_name',     String),
+        ('client_play_as',  UInt8),
     ]
 
 
 class ServerClientQuitPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CLIENT_QUIT
     _fields = [
-        ('client_id', protocol.UInt32),
+        ('client_id', UInt32),
     ]
 
 
 class ServerClientErrorPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CLIENT_QUIT
     _fields = [
-        ('client_id',   protocol.UInt32),
-        ('error',       protocol.UInt8),
+        ('client_id',   UInt32),
+        ('error',       UInt8),
     ]
 
 
 class ServerCompanyNewPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_NEW
     _fields = [
-        ('company_id', protocol.UInt8),
+        ('company_id', UInt8),
     ]
 
 
 class ServerCompanyInfoPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_INFO
     _fields = [
-        ('company_id',              protocol.UInt8),
-        ('company_name',            protocol.String),
-        ('manager_name',            protocol.String),
-        ('colour',                  protocol.UInt8),
-        ('is_passworded',           protocol.Boolean),
-        ('inaugurated_year',        protocol.UInt32),  # Just the year
-        ('is_ai',                   protocol.Boolean),
-        ('months_of_bankruptcy',    protocol.UInt8),
+        ('company_id',              UInt8),
+        ('company_name',            String),
+        ('manager_name',            String),
+        ('colour',                  UInt8),
+        ('is_passworded',           Boolean),
+        ('inaugurated_year',        UInt32),  # Just the year
+        ('is_ai',                   Boolean),
+        ('months_of_bankruptcy',    UInt8),
         ('share_owners',            '_decode_share_owners'),
     ]
 
     def _decode_share_owners(self):
         """Share owners are appended at the end of the packet"""
         res = []
-        share_owner_type = protocol.UInt8
+        share_owner_type = UInt8
         while (self.index + share_owner_type.struct.size) < len(self.raw_data):
             res.append(self._decode_field(share_owner_type))
 
@@ -437,19 +437,19 @@ class ServerCompanyUpdatePacket(ServerPacket):
     """Same fields as erverCompanyInfoPacket"""
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_UPDATE
     _fields = [
-        ('company_id',              protocol.UInt8),
-        ('company_name',            protocol.String),
-        ('manager_name',            protocol.String),
-        ('colour',                  protocol.UInt8),
-        ('is_passworded',           protocol.Boolean),
-        ('months_of_bankruptcy',    protocol.UInt8),
+        ('company_id',              UInt8),
+        ('company_name',            String),
+        ('manager_name',            String),
+        ('colour',                  UInt8),
+        ('is_passworded',           Boolean),
+        ('months_of_bankruptcy',    UInt8),
         ('share_owners',            '_decode_share_owners'),
     ]
 
     def _decode_share_owners(self):
         """Share owners are appended at the end of the packet"""
         res = []
-        share_owner_type = protocol.UInt8
+        share_owner_type = UInt8
         while (self.index + share_owner_type.struct.size) < len(self.raw_data):
             res.append(self._decode_field(share_owner_type))
 
@@ -457,42 +457,42 @@ class ServerCompanyUpdatePacket(ServerPacket):
 class ServerCompanyRemovePacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_REMOVE
     _fields = [
-        ('company_id',    protocol.UInt8),
-        ('remove_reason', protocol.UInt8),  # A value of AdminCompanyRemoveReason
+        ('company_id',    UInt8),
+        ('remove_reason', UInt8),  # A value of AdminCompanyRemoveReason
     ]
 
 
 class ServerCompanyEconomyPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_ECONOMY
     _fields = [
-        ('company_id',              protocol.UInt8),
-        ('money',                   protocol.SInt64),  # British Pound
-        ('current_loan',            protocol.UInt64),
-        ('income',                  protocol.SInt64),  # current year
-        ('delivered_cargo',         protocol.UInt16),  # current quarter
-        ('company_value_0',         protocol.UInt64),
-        ('performance_history_0',   protocol.UInt16),
-        ('delivered_cargo_0',       protocol.UInt16),
-        ('company_value_1',         protocol.UInt64),
-        ('performance_history_1',   protocol.UInt16),
-        ('delivered_cargo_1',       protocol.UInt16),    
+        ('company_id',              UInt8),
+        ('money',                   SInt64),  # British Pound
+        ('current_loan',            UInt64),
+        ('income',                  SInt64),  # current year
+        ('delivered_cargo',         UInt16),  # current quarter
+        ('company_value_0',         UInt64),
+        ('performance_history_0',   UInt16),
+        ('delivered_cargo_0',       UInt16),
+        ('company_value_1',         UInt64),
+        ('performance_history_1',   UInt16),
+        ('delivered_cargo_1',       UInt16),    
     ]
 
 
 class ServerCompanyStatsPacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_COMPANY_STATS
     _fields = [
-        ('company_id',              protocol.UInt8),
-        ('train_vehicles_count',    protocol.UInt16),
-        ('lorry_vehicles_count',    protocol.UInt16),
-        ('bus_vehicles_count',      protocol.UInt16),
-        ('plane_vehicles_count',    protocol.UInt16),
-        ('ship_vehicles_count',     protocol.UInt16),
-        ('train_stations_count',    protocol.UInt16),
-        ('lorry_stations_count',    protocol.UInt16),
-        ('bus_stations_count',      protocol.UInt16),
-        ('plane_stations_count',    protocol.UInt16),
-        ('ship_stations_count',     protocol.UInt16),
+        ('company_id',              UInt8),
+        ('train_vehicles_count',    UInt16),
+        ('lorry_vehicles_count',    UInt16),
+        ('bus_vehicles_count',      UInt16),
+        ('plane_vehicles_count',    UInt16),
+        ('ship_vehicles_count',     UInt16),
+        ('train_stations_count',    UInt16),
+        ('lorry_stations_count',    UInt16),
+        ('bus_stations_count',      UInt16),
+        ('plane_stations_count',    UInt16),
+        ('ship_stations_count',     UInt16),
     ]
 
 
@@ -507,15 +507,15 @@ class ServerShutdownPacket(ServerPacket):
 class ServerConsolePacket(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CONSOLE
     _fields = [
-        ('origin', protocol.String),
-        ('string', protocol.String),
+        ('origin', String),
+        ('string', String),
     ]
 
 
 class ServerErrorPackage(ServerPacket):
     type_ = PacketTypes.ADMIN_PACKET_SERVER_ERROR
     _fields = [
-        ('error', protocol.UInt8)  # NetworkErrorCode
+        ('error', UInt8)  # NetworkErrorCode
     ]
 
 

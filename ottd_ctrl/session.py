@@ -10,9 +10,10 @@ import time
 # project
 from .admin_client import AdminClient, CallbackPrepend
 from . import packet
+from .const import AdminUpdateFrequency as AUF, AdminUpdateType as AUT
 from .const import AdminUpdateFrequencyStr, AdminUpdateTypeStr
-from .const import PacketTypes
-from .const import NetworkErrorCodeStr
+from .const import DestType, PacketTypes as PT
+from .const import NetworkAction, NetworkErrorCodeStr
 
 
 class NotAllPacketReceived(Exception):
@@ -22,31 +23,47 @@ class NotAllPacketReceived(Exception):
 class Session(AdminClient):
     def __init__(self, client_name, password, client_version,
                  server_host, server_port,
-                 timeout_s=None, callbacks=None, update_frequencies=None):
+                 timeout_s=None, callbacks=None, update_frequencies=None,
+                 client_welcome_message=None):
         super().__init__(server_host, server_port, timeout_s, callbacks)
 
         self.log = logging.getLogger('session')
-        builtin_callbacks = {
-            None:                                       (CallbackPrepend, [self._on_packet]),
-            PacketTypes.ADMIN_PACKET_SERVER_WELCOME:    (CallbackPrepend, [self._on_welcome]),
-            PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL:   (CallbackPrepend, [self._on_protocol]),
-            PacketTypes.ADMIN_PACKET_SERVER_DATE:       (CallbackPrepend, [self._on_date]),
-            PacketTypes.ADMIN_PACKET_SERVER_RCON:       (CallbackPrepend, [self._on_rcon]),
-            PacketTypes.ADMIN_PACKET_SERVER_NEWGAME:    (CallbackPrepend, [self._on_new_game]),
-            PacketTypes.ADMIN_PACKET_SERVER_SHUTDOWN:   (CallbackPrepend, [self._on_server_shutdown]),
-            PacketTypes.ADMIN_PACKET_SERVER_CONSOLE:    (CallbackPrepend, [self._on_console]),
-            PacketTypes.ADMIN_PACKET_SERVER_ERROR:      (CallbackPrepend, [self._on_server_error]),
-            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_JOIN:(CallbackPrepend, [self._on_client_join]),
-            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_INFO:(CallbackPrepend, [self._on_client_info]),
-            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_UPDATE: (CallbackPrepend, [self._on_client_update]),
-            PacketTypes.ADMIN_PACKET_SERVER_CLIENT_QUIT: (CallbackPrepend, [self._on_client_quit]),
+
+        update_frequencies = update_frequencies or {}
+
+        self._update_frequencies = {
+            AUT.ADMIN_UPDATE_DATE:              AUF.ADMIN_FREQUENCY_DAILY,
+            AUT.ADMIN_UPDATE_CLIENT_INFO:       AUF.ADMIN_FREQUENCY_AUTOMATIC,
+            AUT.ADMIN_UPDATE_COMPANY_INFO:      AUF.ADMIN_FREQUENCY_AUTOMATIC,
+            AUT.ADMIN_UPDATE_COMPANY_ECONOMY:   AUF.ADMIN_FREQUENCY_WEEKLY,
+            AUT.ADMIN_UPDATE_COMPANY_STATS:     AUF.ADMIN_FREQUENCY_WEEKLY,
+            AUT.ADMIN_UPDATE_CHAT:              AUF.ADMIN_FREQUENCY_AUTOMATIC,
+            AUT.ADMIN_UPDATE_CONSOLE:           AUF.ADMIN_FREQUENCY_AUTOMATIC,
         }
-        self._register_callbacks(builtin_callbacks)
+        self._update_frequencies.update(update_frequencies)
+
+        builtin_callbacks = {
+            None:                                   self._on_packet,
+            PT.ADMIN_PACKET_SERVER_WELCOME:         self._on_welcome,
+            PT.ADMIN_PACKET_SERVER_PROTOCOL:        self._on_protocol,
+            PT.ADMIN_PACKET_SERVER_DATE:            self._on_date,
+            PT.ADMIN_PACKET_SERVER_RCON:            self._on_rcon,
+            PT.ADMIN_PACKET_SERVER_NEWGAME:         self._on_new_game,
+            PT.ADMIN_PACKET_SERVER_SHUTDOWN:        self._on_server_shutdown,
+            PT.ADMIN_PACKET_SERVER_CONSOLE:         self._on_console,
+            PT.ADMIN_PACKET_SERVER_ERROR:           self._on_server_error,
+            PT.ADMIN_PACKET_SERVER_CLIENT_JOIN:     self._on_client_join,
+            PT.ADMIN_PACKET_SERVER_CLIENT_INFO:     self._on_client_info,
+            PT.ADMIN_PACKET_SERVER_CLIENT_UPDATE:   self._on_client_update,
+            PT.ADMIN_PACKET_SERVER_CLIENT_QUIT:     self._on_client_quit,
+            PT.ADMIN_PACKET_SERVER_CHAT:            self._on_chat,
+        }
+        self.register_callbacks(builtin_callbacks, position=CallbackPrepend)
 
         self.client_name = client_name
         self.password = password
         self.client_version = client_version
-        self._update_frequencies = update_frequencies
+        self.client_welcome_message = client_welcome_message
 
         self.welcome_packet = None
         self.protocol_packet = None
@@ -60,7 +77,12 @@ class Session(AdminClient):
         # Set when we send an rcon package
         self._current_rcon_request = None
 
-        self.connected_clients = {}  # by client ID
+    def _format_company_welcome_msg(self):
+        if not isinstance(self.client_welcome_message, (list, tuple)):
+            message = list(self.client_welcome_message)
+        else:
+            message = self.client_welcome_message
+        return ['-' * 20] + list(message) + ['-' * 20]
 
     def _set_update_frequencies(self, update_frequencies):
         [self.set_update_frequency(*u_type_freq) for u_type_freq in update_frequencies.items()]
@@ -80,13 +102,13 @@ class Session(AdminClient):
         self.send_packet(packet.AdminJoinPacket(password=self.password,
                                                 name=self.client_name,
                                                 version=self.client_version))
-        self.wait_for_packets(packet_types=[PacketTypes.ADMIN_PACKET_SERVER_PROTOCOL,
-                                            PacketTypes.ADMIN_PACKET_SERVER_WELCOME],
+        self.wait_for_packets(packet_types=[PT.ADMIN_PACKET_SERVER_PROTOCOL,
+                                            PT.ADMIN_PACKET_SERVER_WELCOME],
                               timeout_s=5)
 
         if self._server_joined:
-            self.log.info("Server '%s' joined, protocol version: %s",
-                     self.server_name, self.server_version)
+            self.log.info("Joined server '%s', protocol version: %s",
+                self.server_name, self.server_version)
         else:
             self.log.error("Could not jon server")
 
@@ -107,7 +129,7 @@ class Session(AdminClient):
             'packet': pkt,
             'results': []
         }
-        pkt = self.wait_for_packet(PacketTypes.ADMIN_PACKET_SERVER_RCON_END, timeout_s)
+        pkt = self.wait_for_packet(PT.ADMIN_PACKET_SERVER_RCON_END, timeout_s)
         self.log.debug("Result for RCON command '%s': ", command)
         for line in self._current_rcon_request['results']:
             self.log.info(line)
@@ -183,13 +205,11 @@ class Session(AdminClient):
         while len(rlist) > 0 and not self.stop:
             if nb is not None and nb_received >= nb:
                 break
-            self.log.debug('socket ready for read')
             self.receive_packet()
             nb_received += 1
             rlist, wlist, xlist = select([self.socket], [], [], timeout_s)
         if nb is not None and nb_received < nb:
             raise NotAllPacketReceived()
-        self.log.debug('nothing to read')
 
     # we store data coming from server directly in the received packets
     @property
@@ -201,6 +221,7 @@ class Session(AdminClient):
         return self.protocol_packet.version if self.welcome_packet is not None else None
 
     # #### callback on packet reception ######################################
+    # #### these can be overridden, don't forget to call super()!
     def _on_packet(self, pkt):
         self.log.debug('Received %s: %s', pkt.__class__.__name__, pkt.pretty())
 
@@ -236,19 +257,22 @@ class Session(AdminClient):
         self.log.info('Error: %s', NetworkErrorCodeStr[pkt.error])
 
     def _on_client_join(self, pkt):
-        self.connected_clients[pkt.client_id] = None
+        # senging a welcome message if set
+        if self.client_welcome_message:
+            for line in self._format_company_welcome_msg():
+                self.send_packet(packet.AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT_CLIENT,
+                                                        destination_type=DestType.DESTTYPE_CLIENT,
+                                                        destination=pkt.client_id,
+                                                        message=line))
 
     def _on_client_info(self, pkt):
-        self.connected_clients[pkt.client_id] = pkt
+        pass
 
     def _on_client_update(self, pkt):
         pass
 
     def _on_client_quit(self, pkt):
-        try:
-            del self.connected_clients[pkt.client_id]
-        except KeyError:
-            self.log.exception('Client that quit was unknown')
+        pass
 
-    def log_connected_clients(self):
-        self.log.info('Connected clients: {}', self.connected_clients)
+    def _on_chat(self, pkt):
+        pass

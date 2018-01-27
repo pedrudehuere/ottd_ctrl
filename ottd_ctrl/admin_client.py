@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 # standard library
 from collections import defaultdict
 from contextlib import contextmanager
@@ -15,11 +14,11 @@ DEFAULT_SOCKET_TIMEOUT_S = 5
 
 
 class CallbackPrepend:
-    pass
+    """Used for callback registration, callback will inserted at the beginning"""
 
 
 class CallbackAppend:
-    pass
+    """Used for callback registration, callback will inserted at the end"""
 
 
 class ConnectionClosedByPeer(Exception):
@@ -40,21 +39,29 @@ class AdminClient:
         self.log = logging.getLogger("admin-client")
         self.log.setLevel(logging.DEBUG)
         self.callbacks = defaultdict(list)
-        self._register_callbacks(callbacks or {})
+        self.register_callbacks(callbacks or {})
 
-    def _register_callbacks(self, callbacks):
-        [[self.register_callback(pt, cb, pos)
-          for cb in cbs]
-         for pt, (pos, cbs) in callbacks.items()]
+    def register_callbacks(self, callbacks, position=CallbackAppend):
+        for packet_type, callback in callbacks.items():
+            self.register_callback(packet_type, callback, position)
 
-    def register_callback(self, packet_type, callback, position=None):
-        if position is None:
-            position = CallbackAppend
+    def register_callback(self, packet_type, callback, position=CallbackAppend):
+        """
+        Registers a callback for a given packet type
+        :param packet_type: A PacketType const.PacketTypes
+        :param callback: A callable or list/tuple of callables
+        :param position: An integer or one of CallbackAppend, CallbackPrepend
+        """
         if position is CallbackAppend:
             position = len(self.callbacks[packet_type])
         elif position is CallbackPrepend:
             position = 0
-        self.callbacks[packet_type].insert(position, callback)
+        if isinstance(callback, (tuple, list)):
+            self.callbacks[packet_type] = (self.callbacks[packet_type][:position] +
+                                           list(callback) +
+                                           self.callbacks[packet_type][position:])
+        else:
+            self.callbacks[packet_type].insert(position, callback)
 
     @property
     def is_connected(self):

@@ -6,6 +6,7 @@ Tests! Yay!
 
 # standard library
 import os.path
+import sys
 
 # related
 import pytest
@@ -27,4 +28,4 @@ if __name__ == '__main__':
     ]
     tests = [os.path.join(tests_base_path, t) for t in tests]
 
-    pytest.main(pytest_params + tests)
+    pytest.main(pytest_params + sys.argv[1:] + tests)

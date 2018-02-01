@@ -56,6 +56,11 @@ class Session(AdminClient):
             PT.ADMIN_PACKET_SERVER_CLIENT_INFO:     [self._on_client_info, self.on_client_info],
             PT.ADMIN_PACKET_SERVER_CLIENT_UPDATE:   [self._on_client_update, self.on_client_update],
             PT.ADMIN_PACKET_SERVER_CLIENT_QUIT:     [self._on_client_quit, self.on_client_quit],
+            PT.ADMIN_PACKET_SERVER_COMPANY_NEW:     self.on_company_new,
+            PT.ADMIN_PACKET_SERVER_COMPANY_UPDATE:  self.on_company_update,
+            PT.ADMIN_PACKET_SERVER_COMPANY_INFO:    self.on_company_info,
+            PT.ADMIN_PACKET_SERVER_COMPANY_ECONOMY: self.on_company_economy,
+            PT.ADMIN_PACKET_SERVER_COMPANY_STATS:   self.on_company_stats,
             PT.ADMIN_PACKET_SERVER_CHAT:            [self._on_chat, self.on_chat],
         }
         self.register_callbacks(builtin_callbacks, position=CallbackPrepend)
@@ -341,6 +346,21 @@ class Session(AdminClient):
         pass
 
     def on_client_quit(self, pkt):
+        pass
+
+    def on_company_new(self, pkt):
+        pass
+
+    def on_company_update(self, pkt):
+        pass
+
+    def on_company_info(self, pkt):
+        pass
+
+    def on_company_economy(self, pkt):
+        pass
+
+    def on_company_stats(self, pkt):
         pass
 
     def on_chat(self, pkt):

@@ -25,6 +25,7 @@ if __name__ == '__main__':
         'admin_client_test.py',
         'packet_test.py',
         'protocol_test.py',
+        'session_test.py',
     ]
     tests = [os.path.join(tests_base_path, t) for t in tests]
 

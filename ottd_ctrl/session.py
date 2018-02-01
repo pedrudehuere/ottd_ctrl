@@ -72,6 +72,8 @@ class Session(AdminClient):
 
         self.stop = False
         self._server_joined = False
+
+        self.last_received_date = None
         self.current_date = None
 
         # Set when we send an rcon package
@@ -235,6 +237,21 @@ class Session(AdminClient):
 
     def _on_date(self, pkt):
         self.current_date = pkt.date
+        if self.last_received_date is not None:
+            if self.last_received_date.year < self.current_date.year:
+                self.on_new_year(self.current_date)
+                self.on_new_month(self.current_date)
+                self.on_new_day(self.current_date)
+
+            elif self.last_received_date.month < self.current_date.month:
+                self.on_new_month(self.current_date)
+                self.on_new_day(self.current_date)
+
+            elif self.last_received_date.day < self.current_date.day:
+                self.on_new_day(self.current_date)
+
+        else:
+            self.last_received_date = self.current_date
 
     def _on_rcon(self, pkt):
         if self._current_rcon_request is None:

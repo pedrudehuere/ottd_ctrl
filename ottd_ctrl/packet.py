@@ -15,6 +15,8 @@ size_len = size_fmt.size
 type_len = type_fmt.size
 delimiter_size = 1
 
+DATE_FMT = '%Y.%m.%d'
+
 
 class PacketError(Exception):
     """Base Packet related errors"""
@@ -67,7 +69,15 @@ class Packet:
         """Returns a pretty representation of itself"""
         return ', '.join(['%s: %s' % (field[0], getattr(self, field[0])) for field in self._fields])
 
+    __str__ = pretty
 
+    def __repr__(self):
+        return self.__class__.__name__
+
+
+# format of admin packets can be found in the
+# ServerNetworkAdminSocketHandler::Receive_XXX(Packet *p) methods
+# in src/network/network_admin.cpp in the OpenTTD source code
 class AdminPacket(Packet):
     """Packets sent by admin"""
     log = logging.getLogger('AdminPacket')
@@ -133,6 +143,9 @@ class AdminPacket(Packet):
         return self.pkt_size_field(value=pkt_size).raw_data
 
 
+# format of server packets can be found in the
+# ServerNetworkAdminSocketHandler::SendXXX() method
+# in src/network/network_admin.cpp in the OpenTTD source code
 class ServerPacket(Packet):
     """Packets send by server"""
     log = logging.getLogger('ServerPacket')
@@ -309,6 +322,9 @@ class ServerDatePacket(ServerPacket):
     _fields = [
         ('date', Date),
     ]
+
+    def __repr__(self):
+        return super().__repr__() + '({})'.format(self.date.strftime(DATE_FMT))
 
 
 class ServerRConEndPacket(ServerPacket):

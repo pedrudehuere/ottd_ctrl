@@ -43,20 +43,20 @@ class Session(AdminClient):
         self._update_frequencies.update(update_frequencies)
 
         builtin_callbacks = {
-            None:                                   self._on_packet,
-            PT.ADMIN_PACKET_SERVER_WELCOME:         self._on_welcome,
-            PT.ADMIN_PACKET_SERVER_PROTOCOL:        self._on_protocol,
-            PT.ADMIN_PACKET_SERVER_DATE:            self._on_date,
-            PT.ADMIN_PACKET_SERVER_RCON:            self._on_rcon,
-            PT.ADMIN_PACKET_SERVER_NEWGAME:         self._on_new_game,
-            PT.ADMIN_PACKET_SERVER_SHUTDOWN:        self._on_server_shutdown,
-            PT.ADMIN_PACKET_SERVER_CONSOLE:         self._on_console,
-            PT.ADMIN_PACKET_SERVER_ERROR:           self._on_server_error,
-            PT.ADMIN_PACKET_SERVER_CLIENT_JOIN:     self._on_client_join,
-            PT.ADMIN_PACKET_SERVER_CLIENT_INFO:     self._on_client_info,
-            PT.ADMIN_PACKET_SERVER_CLIENT_UPDATE:   self._on_client_update,
-            PT.ADMIN_PACKET_SERVER_CLIENT_QUIT:     self._on_client_quit,
-            PT.ADMIN_PACKET_SERVER_CHAT:            self._on_chat,
+            None:                                   [self._on_packet, self.on_packet],
+            PT.ADMIN_PACKET_SERVER_WELCOME:         [self._on_welcome, self.on_welcome],
+            PT.ADMIN_PACKET_SERVER_PROTOCOL:        [self._on_protocol, self.on_protocol],
+            PT.ADMIN_PACKET_SERVER_DATE:            [self._on_date, self.on_date],
+            PT.ADMIN_PACKET_SERVER_RCON:            [self._on_rcon, self.on_rcon],
+            PT.ADMIN_PACKET_SERVER_NEWGAME:         [self._on_new_game, self.on_new_game],
+            PT.ADMIN_PACKET_SERVER_SHUTDOWN:        [self._on_server_shutdown, self.on_server_shutdown],
+            PT.ADMIN_PACKET_SERVER_CONSOLE:         [self._on_console, self.on_console],
+            PT.ADMIN_PACKET_SERVER_ERROR:           [self._on_server_error, self.on_server_error],
+            PT.ADMIN_PACKET_SERVER_CLIENT_JOIN:     [self._on_client_join, self.on_client_join],
+            PT.ADMIN_PACKET_SERVER_CLIENT_INFO:     [self._on_client_info, self.on_client_info],
+            PT.ADMIN_PACKET_SERVER_CLIENT_UPDATE:   [self._on_client_update, self.on_client_update],
+            PT.ADMIN_PACKET_SERVER_CLIENT_QUIT:     [self._on_client_quit, self.on_client_quit],
+            PT.ADMIN_PACKET_SERVER_CHAT:            [self._on_chat, self.on_chat],
         }
         self.register_callbacks(builtin_callbacks, position=CallbackPrepend)
 
@@ -108,7 +108,7 @@ class Session(AdminClient):
 
         if self._server_joined:
             self.log.info("Joined server '%s', protocol version: %s",
-                self.server_name, self.server_version)
+                          self.server_name, self.server_version)
         else:
             self.log.error("Could not jon server")
 
@@ -220,8 +220,8 @@ class Session(AdminClient):
     def server_version(self):
         return self.protocol_packet.version if self.welcome_packet is not None else None
 
-    # #### callback on packet reception ######################################
-    # #### these can be overridden, don't forget to call super()!
+    # #### private callback on packet reception ######################################
+    # #### these are not supposed to ne overridden
     def _on_packet(self, pkt):
         self.log.debug('Received %s: %s', pkt.__class__.__name__, pkt.pretty())
 
@@ -257,7 +257,7 @@ class Session(AdminClient):
         self.log.info('Error: %s', NetworkErrorCodeStr[pkt.error])
 
     def _on_client_join(self, pkt):
-        # senging a welcome message if set
+        # sending a welcome message if set
         if self.client_welcome_message:
             for line in self._format_company_welcome_msg():
                 self.send_packet(packet.AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT_CLIENT,
@@ -276,3 +276,56 @@ class Session(AdminClient):
 
     def _on_chat(self, pkt):
         pass
+
+    # #### public callbacks, these can be overridden #########################
+    def on_packet(self, pkt):
+        pass
+
+    def on_welcome(self, pkt):
+        pass
+
+    def on_protocol(self, pkt):
+        pass
+
+    def on_date(self, date):
+        pass
+
+    def on_new_day(self, date):
+        pass
+
+    def on_new_month(self, date):
+        pass
+
+    def on_new_year(self, date):
+        pass
+
+    def on_rcon(self, pkt):
+        pass
+
+    def on_console(self, pkt):
+        pass
+
+    def on_new_game(self, pkt):
+        pass
+
+    def on_server_shutdown(self, pkt):
+        pass
+
+    def on_server_error(self, pkt):
+        pass
+
+    def on_client_join(self, pkt):
+        pass
+
+    def on_client_info(self, pkt):
+        pass
+
+    def on_client_update(self, pkt):
+        pass
+
+    def on_client_quit(self, pkt):
+        pass
+
+    def on_chat(self, pkt):
+        pass
+

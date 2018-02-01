@@ -115,13 +115,13 @@ class AdminClient:
         # calling generic callbacks (for all received packets)
         generic_callbacks = self.callbacks.get(None, [])
         for cb in generic_callbacks:
-            cb(pkt)
+            self._call_callback(cb, pkt)
         # callbacks for specific packet
         callbacks = self.callbacks.get(pkt.type_, [])
         if len(callbacks) == 0:
             self.log.warning('No callback for packet type %s', PacketTypesStr[pkt.type_])
         for cb in callbacks:
-            cb(pkt)
+            self._call_callback(cb, pkt)
         return pkt
 
     def _read_bytes(self, nb):
@@ -137,3 +137,14 @@ class AdminClient:
             nb -= len(recvd)
             res += recvd
         return res
+
+    def _call_callback(self, cb, *args, **kwargs):
+        """Calls callback"""
+        try:
+            cb(*args, **kwargs)
+        except Exception as e:
+            args_str = ','.join(repr(a) for a in args)
+            kwargs_str = ','.join('{}={}'.format(k, repr(v)) for k, v in kwargs.items())
+            args_kwargs_str = ','.join([e for e in (args_str, kwargs_str) if e != ''])
+            cb_str = '{}({})'.format(cb.__name__, args_kwargs_str)
+            self.log.exception('Error while executing callback %s', cb_str)

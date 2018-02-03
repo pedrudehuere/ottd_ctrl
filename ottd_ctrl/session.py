@@ -255,8 +255,7 @@ class Session(AdminClient):
             elif self.last_received_date.day < self.current_date.day:
                 self.on_new_day(self.current_date)
 
-        else:
-            self.last_received_date = self.current_date
+        self.last_received_date = self.current_date
 
     def _on_rcon(self, pkt):
         if self._current_rcon_request is None:

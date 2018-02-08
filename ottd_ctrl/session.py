@@ -2,15 +2,13 @@
 
 # standard library
 from contextlib import contextmanager
-import logging
 import math
 from select import select
 import time
 
 # project
 from .admin_client import AdminClient, CallbackPrepend
-from . import packet
-from .const import AdminUpdateFrequency as AUF, AdminUpdateType as AUT
+from .packet import *
 from .const import AdminUpdateFrequencyStr, AdminUpdateTypeStr
 from .const import DestType, PacketTypes as PT
 from .const import NetworkAction, NetworkErrorCodeStr
@@ -21,28 +19,36 @@ class NotAllPacketReceived(Exception):
 
 
 class Session(AdminClient):
-    def __init__(self, client_name, password, client_version,
-                 server_host, server_port,
-                 timeout_s=None, callbacks=None, update_frequencies=None,
+    def __init__(self,
+                 client_name,
+                 password,
+                 client_version,
+                 server_host,
+                 server_port,
+                 timeout_s=None,
+                 update_frequencies=None,
                  client_welcome_message=None):
-        super().__init__(server_host, server_port, timeout_s, callbacks)
+        """
+        A convenience class which inherits from AdminClient,
+        keeps track of some data such as the current date and provides helper
+        methods and callbacks
+        :param client_name: Name of the admin client
+        :param password: Password of the admin server
+        :param client_version: Client version
+        :param server_host: Host of the admin server
+        :param server_port: Port of the admin server
+        :param timeout_s: Timeout for socket operations
+        :param update_frequencies: {AdminUpdateType: AdminUpdateFrequency, ...}
+        :param client_welcome_message: A message which will be sent to a connected client,
+                                       string or sequence of strings
+        """
+        super().__init__(server_host, server_port, timeout_s)
 
         self.log = logging.getLogger('session')
 
-        update_frequencies = update_frequencies or {}
+        self._update_frequencies = update_frequencies or {}
 
-        self._update_frequencies = {
-            AUT.ADMIN_UPDATE_DATE:              AUF.ADMIN_FREQUENCY_DAILY,
-            AUT.ADMIN_UPDATE_CLIENT_INFO:       AUF.ADMIN_FREQUENCY_AUTOMATIC,
-            AUT.ADMIN_UPDATE_COMPANY_INFO:      AUF.ADMIN_FREQUENCY_AUTOMATIC,
-            AUT.ADMIN_UPDATE_COMPANY_ECONOMY:   AUF.ADMIN_FREQUENCY_WEEKLY,
-            AUT.ADMIN_UPDATE_COMPANY_STATS:     AUF.ADMIN_FREQUENCY_WEEKLY,
-            AUT.ADMIN_UPDATE_CHAT:              AUF.ADMIN_FREQUENCY_AUTOMATIC,
-            AUT.ADMIN_UPDATE_CONSOLE:           AUF.ADMIN_FREQUENCY_AUTOMATIC,
-        }
-        self._update_frequencies.update(update_frequencies)
-
-        builtin_callbacks = {
+        self._pkt_callbacks = {
             None:                                   [self._on_packet, self.on_packet],
             PT.ADMIN_PACKET_SERVER_WELCOME:         [self._on_welcome, self.on_welcome],
             PT.ADMIN_PACKET_SERVER_PROTOCOL:        [self._on_protocol, self.on_protocol],
@@ -63,7 +69,7 @@ class Session(AdminClient):
             PT.ADMIN_PACKET_SERVER_COMPANY_STATS:   self.on_company_stats,
             PT.ADMIN_PACKET_SERVER_CHAT:            [self._on_chat, self.on_chat],
         }
-        self.register_callbacks(builtin_callbacks, position=CallbackPrepend)
+        self.register_callbacks(self._pkt_callbacks, position=CallbackPrepend)
 
         self.client_name = client_name
         self.password = password
@@ -106,9 +112,9 @@ class Session(AdminClient):
         if self.is_connected:
             raise Exception('Already connected to server')
         self.connect()
-        self.send_packet(packet.AdminJoinPacket(password=self.password,
-                                                name=self.client_name,
-                                                version=self.client_version))
+        self.send_packet(AdminJoinPacket(password=self.password,
+                                         name=self.client_name,
+                                         version=self.client_version))
         self.wait_for_packets(packet_types=[PT.ADMIN_PACKET_SERVER_PROTOCOL,
                                             PT.ADMIN_PACKET_SERVER_WELCOME],
                               timeout_s=5)
@@ -119,8 +125,9 @@ class Session(AdminClient):
         else:
             self.log.error("Could not jon server")
 
-        # setting update frequencies
-        self._set_update_frequencies(self._update_frequencies)
+        if self._update_frequencies:
+            self._set_update_frequencies(self._update_frequencies)
+
         self.on_server_joined()
 
     def send_rcon(self, command, timeout_s=5):
@@ -131,7 +138,7 @@ class Session(AdminClient):
         """
         if self._current_rcon_request is not None:
             self.log.error('Sending RCON while RCON request in progress')
-        pkt = packet.AdminRConPacket(command=command)
+        pkt = AdminRConPacket(command=command)
         self.send_packet(pkt)
         self._current_rcon_request = {
             'packet': pkt,
@@ -192,10 +199,10 @@ class Session(AdminClient):
         :param dest: Destination, company_id, client_id or 0
         :param message: A string
         """
-        self.send_packet(packet.AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT,
-                                                destination_type=dest_type,
-                                                destination=dest,
-                                                message=message))
+        self.send_packet(AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT,
+                                         destination_type=dest_type,
+                                         destination=dest,
+                                         message=message))
 
     def set_update_frequency(self, update_type, update_frequency):
         """Checks if given frequency is supported by server, if not raises an error"""
@@ -206,8 +213,8 @@ class Session(AdminClient):
                 raise Exception('Frequency %s not supported for type %s' %
                                 (AdminUpdateFrequencyStr[update_frequency],
                                  AdminUpdateTypeStr[update_type]))
-            self.send_packet(packet.AdminUpdateFrequenciesPacket(update_type=update_type,
-                                                                 update_frequency=update_frequency))
+            self.send_packet(AdminUpdateFrequenciesPacket(update_type=update_type,
+                                                          update_frequency=update_frequency))
         else:
             self.log.warning('Setting update frequencies without knowing supported frequencies')
 
@@ -216,7 +223,7 @@ class Session(AdminClient):
             self.receive_packets(timeout_s=5)
 
     def quit_server(self):
-        self.send_packet(packet.AdminQuitPacket())
+        self.send_packet(AdminQuitPacket())
         self.disconnect()
         self._server_joined = False
         self.on_server_quit()
@@ -230,7 +237,7 @@ class Session(AdminClient):
             start_time = time.time()
             pkt = self.receive_packet()
             if pkt.type_ == packet_type:
-                return packet
+                return pkt
             elapsed_s = time.time() - start_time
             remaining_s -= elapsed_s
         else:
@@ -335,10 +342,10 @@ class Session(AdminClient):
         # sending a welcome message if set
         if self.client_welcome_message:
             for line in self._format_company_welcome_msg():
-                self.send_packet(packet.AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT_CLIENT,
-                                                        destination_type=DestType.DESTTYPE_CLIENT,
-                                                        destination=pkt.client_id,
-                                                        message=line))
+                self.send_packet(AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT_CLIENT,
+                                                 destination_type=DestType.DESTTYPE_CLIENT,
+                                                 destination=pkt.client_id,
+                                                 message=line))
 
     def _on_client_info(self, pkt):
         pass

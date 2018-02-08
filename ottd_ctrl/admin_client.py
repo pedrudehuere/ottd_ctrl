@@ -42,14 +42,20 @@ class AdminClient:
         self.register_callbacks(callbacks or {})
 
     def register_callbacks(self, callbacks, position=CallbackAppend):
+        """
+        Registers callbacks for received packets
+        :param callbacks: {pkt_type: [callback, ...], ...}
+        :param position: Position in which insert callbacks in the call list,
+                         an integer or one of CallbackPrepend, CallbackAppend
+        """
         for packet_type, callback in callbacks.items():
             self.register_callback(packet_type, callback, position)
 
     def register_callback(self, packet_type, callback, position=CallbackAppend):
         """
-        Registers a callback for a given packet type
+        Registers callbacks for a given packet type
         :param packet_type: A PacketType const.PacketTypes
-        :param callback: A callable or list/tuple of callables
+        :param callback: A callable with a packet as only argument
         :param position: An integer or one of CallbackAppend, CallbackPrepend
         """
         if position is CallbackAppend:

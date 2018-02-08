@@ -299,7 +299,7 @@ class ServerProtocolPacket(ServerPacket):
     def pretty(self):
         return ', '.join([str(self.version)] +
                          ['%s: 0x%x' % (AdminUpdateTypeStr[k], v)
-                  for k, v in self.supported_update_freqs.items()])
+                          for k, v in self.supported_update_freqs.items()])
 
 
 class ServerWelcomePacket(ServerPacket):
@@ -385,6 +385,11 @@ class ServerClientJoinPacket(ServerPacket):
 
 
 class ServerClientInfoPacket(ServerPacket):
+    """
+    Information about a client
+    the server is a client as well, it has:
+    client_id=1, client_address='' and join_date='0001-01-01'
+    """
     type_ = PacketTypes.ADMIN_PACKET_SERVER_CLIENT_INFO
     _fields = [
         ('client_id',       UInt32),

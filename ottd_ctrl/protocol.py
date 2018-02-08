@@ -150,7 +150,10 @@ class Date(NumberType):
         self._raw_data = UInt32(value=(self._value - EPOCH_DATE).days + 366).raw_data
 
     def decode(self):
-        self._value = EPOCH_DATE + timedelta(days=UInt32(raw_data=self._raw_data).value - 366)
+        try:
+            self._value = EPOCH_DATE + timedelta(days=UInt32(raw_data=self._raw_data).value - 366)
+        except OverflowError as e:
+            self._value = EPOCH_DATE
         self._raw_data = self._raw_data[:self.raw_size]
 
 

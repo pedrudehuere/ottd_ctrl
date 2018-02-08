@@ -121,6 +121,7 @@ class Session(AdminClient):
 
         # setting update frequencies
         self._set_update_frequencies(self._update_frequencies)
+        self.on_server_joined()
 
     def send_rcon(self, command, timeout_s=5):
         """
@@ -144,6 +145,58 @@ class Session(AdminClient):
         self._current_rcon_request = None
         return results
 
+    def send_public_chat(self, message):
+        """
+        Sends a public chat message
+        :param message: A string or sequence of strings,
+                       if sequence every element is a different message
+                       TODO I'm not really sure if it is possible to send
+                            a chat message with line breaks, so for the moment the only
+                            way to send multi line messages is to send one message
+                            per line
+        """
+        if not isinstance(message, str):
+            for line in message:
+                self._send_chat(DestType.DESTTYPE_BROADCAST, 0, line)
+        else:
+            self._send_chat(DestType.DESTTYPE_BROADCAST, 0, message)
+
+    def send_company_chat(self, message, company_id):
+        """
+        Sends a chat message to a given company
+        :param message: A string or sequence of strings,
+                        if sequence every element is a different message
+        """
+        if not isinstance(message, str):
+            for line in message:
+                self._send_chat(DestType.DESTTYPE_TEAM, company_id, line)
+        else:
+            self._send_chat(DestType.DESTTYPE_TEAM, company_id, message)
+
+    def send_client_chat(self, message, client_id):
+        """
+        Sends chat message to a given client
+        :param message: A string or sequence of strings,
+                        if sequence every element is a different message
+        """
+        if not isinstance(message, str):
+            for line in message:
+                self._send_chat(DestType.DESTTYPE_CLIENT, client_id, line)
+        else:
+            self._send_chat(DestType.DESTTYPE_CLIENT, client_id, message)
+
+    def _send_chat(self, dest_type, dest, message):
+        """
+        Sends a chat message
+        :param dest_type: DestType
+        :param dest: Destination, company_id, client_id or 0
+        :param message: A string
+        """
+        self.send_packet(packet.AdminChatPacket(network_action=NetworkAction.NETWORK_ACTION_CHAT,
+                                                destination_type=dest_type,
+                                                destination=dest,
+                                                message=message))
+
     def set_update_frequency(self, update_type, update_frequency):
         """Checks if given frequency is supported by server, if not raises an error"""
         if self.supported_update_frequencies is not None:
@@ -166,6 +219,7 @@ class Session(AdminClient):
         self.send_packet(packet.AdminQuitPacket())
         self.disconnect()
         self._server_joined = False
+        self.on_server_quit()
 
     def wait_for_packet(self, packet_type, timeout_s=None):
         """
@@ -299,6 +353,14 @@ class Session(AdminClient):
         pass
 
     # #### public callbacks, these can be overridden #########################
+    # ## server connection ###################################################
+    def on_server_joined(self):
+        pass
+
+    def on_server_quit(self):
+        pass
+
+    # ## packet callbacks ####################################################
     def on_packet(self, pkt):
         pass
 

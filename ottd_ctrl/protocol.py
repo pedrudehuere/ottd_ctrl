@@ -80,7 +80,7 @@ class CompositeType(Type):
     """A higher level type made of other types"""
     _fields = []
 
-    def pretty(self):
+    def __str__(self):
         # TODO tests
         return pformat({f[0]: getattr(self, f[0]) for f in self._fields})
 
@@ -247,7 +247,7 @@ class CompanyEconomy(CompositeType):
 
         return cls(**params), cls.size
 
-    def pretty(self):
+    def __str__(self):
         # TODO complete with stats
         return pformat({
             'company ID':       self.company_id,
@@ -299,7 +299,7 @@ class CompanyStats(CompositeType):
             index += size
         return res, index
 
-    def pretty(self):
+    def __str__(self):
         # TODO complete with stats
         return pformat({
             'company ID':       self.company_id,

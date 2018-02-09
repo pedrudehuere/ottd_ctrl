@@ -291,7 +291,7 @@ class Session(AdminClient):
     # #### private callback on packet reception ######################################
     # #### these are not supposed to ne overridden
     def _on_packet(self, pkt):
-        self.log.debug('Received %s: %s', pkt.__class__.__name__, pkt.pretty())
+        self.log.debug('Received %s', str(pkt))
 
     def _on_welcome(self, pkt):
         self.welcome_packet = pkt

@@ -97,7 +97,7 @@ class AdminClient:
             self.log.info("Disconnected")
 
     def send_packet(self, pkt):
-        self.log.debug('Sending %s', pkt.__class__.__name__)
+        self.log.debug('Sending %s', str(pkt))
         if self.socket is None:
             raise Exception("Cannot send if not connected")
         # TODO handle socket errors

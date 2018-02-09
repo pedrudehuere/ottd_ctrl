@@ -5,7 +5,7 @@ import logging
 from struct import Struct, error as StructError
 
 # project
-from ottd_ctrl.const import AdminUpdateTypeStr, NetworkErrorCodeStr, PacketTypes
+from ottd_ctrl.const import AdminUpdateFrequencyStr, AdminUpdateTypeStr, NetworkErrorCodeStr, PacketTypes
 from ottd_ctrl.protocol import Boolean, Date, String, SInt64, Type, UInt8, UInt16, UInt32, UInt64
 
 # pack formats (all little endian)
@@ -65,11 +65,12 @@ class Packet:
         for f in self._fields:
             setattr(self, f[0], None)
 
-    def pretty(self):
-        """Returns a pretty representation of itself"""
-        return ', '.join(['%s: %s' % (field[0], getattr(self, field[0])) for field in self._fields])
+    def _base_str(self):
+        return '<{}({{}})>'.format(self.__class__.__name__)
 
-    __str__ = pretty
+    def __str__(self):
+        """Returns a pretty representation of itself"""
+        return self._base_str().format(', '.join(['%s: %s' % (field[0], getattr(self, field[0])) for field in self._fields]))
 
     def __repr__(self):
         return self.__class__.__name__
@@ -254,6 +255,13 @@ class AdminUpdateFrequenciesPacket(AdminPacket):
         ('update_frequency', UInt16),  # a value of AdminUpdateFrequency
     ]
 
+    def __str__(self):
+        return '<{}({}, {})>'.format(
+            self.__class__.__name__,
+            AdminUpdateTypeStr[self.update_type],
+            AdminUpdateFrequencyStr[self.update_frequency]
+        )
+
 
 class AdminPingPacket(AdminPacket):
     type_ = PacketTypes.ADMIN_PACKET_ADMIN_PING
@@ -296,7 +304,7 @@ class ServerProtocolPacket(ServerPacket):
         _ = self._decode_field(UInt8)  # final separator
         return res
 
-    def pretty(self):
+    def __str__(self):
         return ', '.join([str(self.version)] +
                          ['%s: 0x%x' % (AdminUpdateTypeStr[k], v)
                           for k, v in self.supported_update_freqs.items()])
@@ -348,8 +356,8 @@ class ServerErrorPacket(ServerPacket):
         ('error', UInt8),
     ]
 
-    def pretty(self):
-        return NetworkErrorCodeStr.get(self.error, 'UNKNOWN')
+    def __str__(self):
+        return self._base_str().format(NetworkErrorCodeStr.get(self.error, 'UNKNOWN'))
 
 
 class ServerPongPacket(ServerPacket):
